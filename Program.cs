@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-//using System.Net.Sockets;
+using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Runtime.Serialization.Json;
 using System.Text;
@@ -111,7 +111,7 @@ namespace jkcnsl
                                     await GetStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, quitCts.Token);
                                 }
                                 break;
-                            /********* 旧実況テストコードここから **********
+                            //********* 旧実況テストコードここから **********
                             case 'H':
                                 {
                                     string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
@@ -120,6 +120,7 @@ namespace jkcnsl
                                         ResponseLines.Add("!");
                                         break;
                                     }
+
                                     await GetChannelsV2Async(arg[0], arg.Length >= 2 ? arg[1] : "", quitCts.Token);
                                 }
                                 break;
@@ -157,7 +158,7 @@ namespace jkcnsl
                                     await GetStreamOldAsync(arg[0], port, arg[2], commands, quitCts.Token);
                                 }
                                 break;
-                            ********** 旧実況テストコードここまで *********/
+                            //********** 旧実況テストコードここまで *********/
                             case '+':
                             case 'c':
                                 break;
@@ -653,7 +654,7 @@ namespace jkcnsl
             return encodeQuot ? s.Replace("\"", "&quot;") : s;
         }
 
-        /********* 旧実況テストコードここから **********
+        //********* 旧実況テストコードここから **********
 
         const int TcpClientSendTimeoutMsec = 8000;
 
@@ -668,7 +669,6 @@ namespace jkcnsl
             catch
             {
                 ct.ThrowIfCancellationRequested();
-                ResponseLines.Add("!");
                 return;
             }
             foreach (string r in ret.Replace("\r", "").Split('\n'))
@@ -808,6 +808,6 @@ namespace jkcnsl
             ResponseLines.Add(".");
         }
 
-        ********** 旧実況テストコードここまで *********/
+        //********** 旧実況テストコードここまで *********/
     }
 }
