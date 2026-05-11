@@ -224,6 +224,7 @@ namespace jkcnsl
                     foreach (string comm in commands.GetConsumingEnumerable(quitCts.Token))
                     {
                         quitCts.Token.ThrowIfCancellationRequested();
+                        Settings.Instance.Load();
                         switch (comm.FirstOrDefault())
                         {
                             case 'A':
@@ -248,31 +249,55 @@ namespace jkcnsl
                                 break;
                             case 'L':
                                 {
-                                    string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
-                                    // ここから結果の出力まで実況ストリーム
-                                    ResponseLines.Add("*");
-                                    ResponseLines.Add(await GetNicovideoStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, new StreamMixingInfo(), quitCts.Token));
+                                    try
+                                    {
+                                        string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 2);
+                                        // ここから結果の出力まで実況ストリーム
+                                        ResponseLines.Add("*");
+                                        string cacheUrl = Settings.Instance.cache_server_url;
+                                        if (!string.IsNullOrEmpty(cacheUrl))
+                                        {
+                                            // キャッシュサーバー経由: 避難所プロトコルで接続
+                                            string refugeUrl = cacheUrl.TrimEnd('/') + "/watch/" + arg[0];
+                                            ResponseLines.Add(await GetRefugeStreamAsync(refugeUrl, commands, new StreamMixingInfo(), quitCts.Token, suppressXRefuge: true));
+                                        }
+                                        else
+                                        {
+                                            ResponseLines.Add(await GetNicovideoStreamAsync(arg[0], arg.Length >= 2 ? arg[1] : "", commands, new StreamMixingInfo(), quitCts.Token));
+                                        }
+                                    }
+                                    finally
+                                    {
+                                        Settings.Instance.Load();
+                                    }
                                 }
                                 break;
                             case 'R':
                                 {
-                                    string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 4);
-                                    // 避難所の種類によって解釈を変える。現在は"R1""R2"のみ
-                                    if (arg.Length < 2 || (arg[0] != "1" && arg[0] != "2"))
+                                    try
                                     {
-                                        ResponseLines.Add("!");
-                                        break;
+                                        string[] arg = comm.Substring(1).Split(new char[] { ' ' }, 4);
+                                        // 避難所の種類によって解釈を変える。現在は"R1""R2"のみ
+                                        if (arg.Length < 2 || (arg[0] != "1" && arg[0] != "2"))
+                                        {
+                                            ResponseLines.Add("!");
+                                            break;
+                                        }
+                                        // ここから結果の出力まで実況ストリーム
+                                        ResponseLines.Add("*");
+                                        if (arg[0] == "2" && arg.Length >= 3)
+                                        {
+                                            // 混合
+                                            await GetNicovideoRefugeMixedStreamAsync(arg[1], arg[2], arg.Length >= 4 ? arg[3] : "", commands, quitCts.Token);
+                                            break;
+                                        }
+                                        // 避難所のみ。"R2"のときは混合時と同様に転送されたコメントを捨てる
+                                        ResponseLines.Add(await GetRefugeStreamAsync(arg[1], commands, new StreamMixingInfo { dropForwardedChat = arg[0] == "2" }, quitCts.Token));
                                     }
-                                    // ここから結果の出力まで実況ストリーム
-                                    ResponseLines.Add("*");
-                                    if (arg[0] == "2" && arg.Length >= 3)
+                                    finally
                                     {
-                                        // 混合
-                                        await GetNicovideoRefugeMixedStreamAsync(arg[1], arg[2], arg.Length >= 4 ? arg[3] : "", commands, quitCts.Token);
-                                        break;
+                                        Settings.Instance.Load();
                                     }
-                                    // 避難所のみ。"R2"のときは混合時と同様に転送されたコメントを捨てる
-                                    ResponseLines.Add(await GetRefugeStreamAsync(arg[1], commands, new StreamMixingInfo { dropForwardedChat = arg[0] == "2" }, quitCts.Token));
                                 }
                                 break;
                             case 'S':
@@ -316,6 +341,14 @@ namespace jkcnsl
                                         {
                                             Settings.Instance.device_name = null;
                                         }
+                                        else if (arg[0] == "cache_server_url")
+                                        {
+                                            Settings.Instance.cache_server_url = null;
+                                        }
+                                        else if (arg[0] == "cache_commentable")
+                                        {
+                                            Settings.Instance.cache_commentable = false;
+                                        }
                                         else if (arg[0].Length == 0)
                                         {
                                             // すべての設定を出力
@@ -345,6 +378,11 @@ namespace jkcnsl
                                             ResponseLines.Add("-device_name " + (Settings.Instance.device_name ?? DeviceName));
                                             ResponseLines.Add("-trust_device " + (Settings.Instance.distrust_device ? "false" : "true"));
                                             ResponseLines.Add("-last_login_attempt " + Settings.Instance.last_login_attempt);
+                                            if (Settings.Instance.cache_server_url != null)
+                                            {
+                                                ResponseLines.Add("-cache_server_url " + Settings.Instance.cache_server_url);
+                                            }
+                                            ResponseLines.Add("-cache_commentable " + (Settings.Instance.cache_commentable ? "true" : "false"));
                                             ResponseLines.Add(".");
                                             break;
                                         }
@@ -384,6 +422,14 @@ namespace jkcnsl
                                         else if (arg[0] == "trust_device")
                                         {
                                             Settings.Instance.distrust_device = arg[1] != "true";
+                                        }
+                                        else if (arg[0] == "cache_server_url")
+                                        {
+                                            Settings.Instance.cache_server_url = arg[1];
+                                        }
+                                        else if (arg[0] == "cache_commentable")
+                                        {
+                                            Settings.Instance.cache_commentable = arg[1] == "true";
                                         }
                                         else
                                         {
@@ -647,7 +693,17 @@ namespace jkcnsl
                 {
                     nicovideoConnected = true;
                     nicovideoInitialized = true;
-                    bool failed = await GetNicovideoStreamAsync(lvId, nicovideoCookie, nicovideoCommands, mixingInfo, ct) != ".";
+                    string cacheUrl = Settings.Instance.cache_server_url;
+                    bool failed;
+                    if (!string.IsNullOrEmpty(cacheUrl))
+                    {
+                        string cacheRefugeUrl = cacheUrl.TrimEnd('/') + "/watch/" + lvId;
+                        failed = await GetRefugeStreamAsync(cacheRefugeUrl, nicovideoCommands, mixingInfo, ct, suppressXRefuge: true) != ".";
+                    }
+                    else
+                    {
+                        failed = await GetNicovideoStreamAsync(lvId, nicovideoCookie, nicovideoCommands, mixingInfo, ct) != ".";
+                    }
                     nicovideoConnected = false;
                     // 適当なタグをでっちあげて切断を通知
                     ResponseLines.Add("-<x_disconnect status=\"" + (failed ? 1 : 0) + "\" />");
@@ -1261,17 +1317,19 @@ namespace jkcnsl
         }
 
         /// <summary>実況ストリーム(避難所)</summary>
-        static async Task<string> GetRefugeStreamAsync(string webSocketUrl, BlockingCollection<string> commands, StreamMixingInfo mixingInfo, CancellationToken ct)
+        static async Task<string> GetRefugeStreamAsync(string webSocketUrl, BlockingCollection<string> commands, StreamMixingInfo mixingInfo, CancellationToken ct, bool suppressXRefuge = false)
         {
             // メソッド実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および https://github.com/asannou/namami を参考にした。
 
-            if (!webSocketUrl.StartsWith("wss://", StringComparison.Ordinal))
+            if (!webSocketUrl.StartsWith("wss://", StringComparison.Ordinal) && !webSocketUrl.StartsWith("ws://", StringComparison.Ordinal))
             {
                 return "!";
             }
 
             // NX-Jikkyoかどうか。chatタグの形式を微妙に変えるだけなので判定はラフ
             bool isNxJikkyo = webSocketUrl.IndexOf("nx-jikkyo", StringComparison.Ordinal) >= 0;
+            // 転送コメント除去のためx_roomで通知されたthread_idを保存する
+            string refugeThreadId = null;
 
             using (var watchSession = new ClientWebSocket())
             using (var commentSession = new ClientWebSocket())
@@ -1289,9 +1347,21 @@ namespace jkcnsl
                     commentSession.Options.AddSubProtocol("msg.nicovideo.jp#json");
                     // 視聴セッションに接続
                     await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
-                    await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
-                        "{\"type\":\"startWatching\",\"data\":{\"room\":{\"protocol\":\"webSocket\",\"commentable\":true},\"reconnect\":false}}")),
-                        WebSocketMessageType.Text, true, ct), ct);
+                    {
+                        string commentable = Settings.Instance.cache_commentable ? "true" : "false";
+                        // cache_commentable=true のとき、投稿用にニコニコのログイン状態を確認する
+                        if (Settings.Instance.cache_commentable)
+                        {
+                            try { await GetNicovideoLoginCookieAsync(null, ct); } catch { }
+                        }
+                        // cookie を含めて送信（per-client 投稿認証のため）
+                        string cookieVal = Settings.Instance.nicovideo_cookie ?? "";
+                        // JSON エスケープ（" と \ を置換）
+                        string cookieJson = "\"" + cookieVal.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                        await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
+                            $"{{\"type\":\"startWatching\",\"data\":{{\"room\":{{\"protocol\":\"webSocket\",\"commentable\":{commentable}}},\"reconnect\":false,\"cookie\":{cookieJson}}}}}")),
+                            WebSocketMessageType.Text, true, ct), ct);
+                    }
 
                     var vposBaseUnixTime = TimeSpan.Zero;
                     int keepSeatIntervalSec = 0;
@@ -1380,7 +1450,9 @@ namespace jkcnsl
                                         (dest_ == "refuge" || !mixingInfo.ignoreUnspecifiedDestinationPost))
                                     {
                                         // コメント投稿
-                                        if ((dest_ != "refuge" && dest_ != null) || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
+                                        // suppressXRefuge=true（Lコマンド経由）の場合はdest="nico"も許可する
+                                        bool destOk = dest_ == null || dest_ == "refuge" || (suppressXRefuge && dest_ == "nico");
+                                        if (!destOk || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
                                         {
                                             // 投稿拒否
                                             ResponseLines.Add("-<chat_result status=\"1\" x_refuge=\"1\" />");
@@ -1510,8 +1582,10 @@ namespace jkcnsl
                                             ResponseLines.Add(("-<x_room" +
                                                 (room.threadId != null ? " thread_id=\"" + HtmlEncodeAmpLtGt(room.threadId, true) + "\"" : "") +
                                                 (room.yourPostKey != null ? " your_post_key=\"" + HtmlEncodeAmpLtGt(room.yourPostKey, true) + "\"" : "") +
-                                                " refuge=\"1\"" +
+                                                (!suppressXRefuge ? " refuge=\"1\"" : "") +
                                                 " />").Replace("\n", "&#10;").Replace("\r", "&#13;"));
+                                            if (room.threadId != null)
+                                                refugeThreadId = room.threadId;
 
                                             if (room.vposBaseTime != null && vposBaseUnixTime <= TimeSpan.Zero)
                                             {
@@ -1523,7 +1597,7 @@ namespace jkcnsl
                                             }
 
                                             if (room.threadId != null && room.messageServer != null && room.messageServer.uri != null &&
-                                                room.messageServer.uri.StartsWith("wss://", StringComparison.Ordinal))
+                                                (room.messageServer.uri.StartsWith("wss://", StringComparison.Ordinal) || room.messageServer.uri.StartsWith("ws://", StringComparison.Ordinal)))
                                             {
                                                 var js = new DataContractJsonSerializerWrapper<List<CommentSessionOpen>>();
                                                 var ms = new MemoryStream();
@@ -1595,8 +1669,9 @@ namespace jkcnsl
                                     if (wroteFirstChat)
                                     {
                                         // 適当なタグをでっちあげて過去のコメントの出力終了を通知
-                                        ResponseLines.Add("-<x_past_chat_end refuge=\"1\" />");
-                                        if (!mixingInfo.dropForwardedChat)
+                                        if (!suppressXRefuge)
+                                            ResponseLines.Add("-<x_past_chat_end refuge=\"1\" />");
+                                        if (!mixingInfo.dropForwardedChat || suppressXRefuge)
                                         {
                                             // インポートされたコメントにたいする通知も必要
                                             ResponseLines.Add("-<x_past_chat_end />");
@@ -1608,8 +1683,9 @@ namespace jkcnsl
                                 else if (!wroteFirstChat)
                                 {
                                     // 適当なタグをでっちあげて過去のコメントの出力開始を通知
-                                    ResponseLines.Add("-<x_past_chat_begin refuge=\"1\" />");
-                                    if (!mixingInfo.dropForwardedChat)
+                                    if (!suppressXRefuge)
+                                        ResponseLines.Add("-<x_past_chat_begin refuge=\"1\" />");
+                                    if (!mixingInfo.dropForwardedChat || suppressXRefuge)
                                     {
                                         // インポートされたコメントにたいする通知も必要
                                         ResponseLines.Add("-<x_past_chat_begin />");
@@ -1623,9 +1699,14 @@ namespace jkcnsl
                                          TimeSpan.FromMilliseconds(((Environment.TickCount & int.MaxValue) - mixingInfo.nicovideoServerUnixTimeTick) & int.MaxValue);
                                 }
                                 // インポートされたコメントを区別する
+                                // 旧形式: user_idが"nicolive:"で始まる、新形式(NX-Jikkyo): threadがrefuge自身のthread_idで始まらない
                                 int userIdPos = message.chat.user_id == null ? -1 :
                                                 message.chat.user_id.StartsWith("nicolive:", StringComparison.Ordinal) ? 9 : 0;
-                                if (userIdPos != 9 || !mixingInfo.dropForwardedChat)
+                                bool isForwarded = (userIdPos == 9) ||
+                                    (refugeThreadId != null && message.chat.thread != null &&
+                                     message.chat.thread != refugeThreadId &&
+                                     !message.chat.thread.StartsWith(refugeThreadId + "_", StringComparison.Ordinal));
+                                if (!isForwarded || !mixingInfo.dropForwardedChat)
                                 {
                                     ResponseLines.Add(("-<chat" +
                                         (message.chat.thread != null ? " thread=\"" + HtmlEncodeAmpLtGt(message.chat.thread, true) + "\"" : "") +
@@ -1639,7 +1720,7 @@ namespace jkcnsl
                                         (message.chat.premium != 0 ? " premium=\"" + (long)message.chat.premium + "\"" : "") +
                                         (message.chat.anonymity != 0 ? " anonymity=\"" + (long)message.chat.anonymity + "\"" : "") +
                                         // NX-Jikkyoは過去ログAPIの形式にする。他はさしあたりx_refuge属性をつける
-                                        (userIdPos > 0 ? "" : isNxJikkyo ? " nx_jikkyo=\"1\"" : " x_refuge=\"1\"") +
+                                        (userIdPos > 0 ? "" : isNxJikkyo ? " nx_jikkyo=\"1\"" : (!suppressXRefuge ? " x_refuge=\"1\"" : "")) +
                                         ">" + HtmlEncodeAmpLtGt(message.chat.content ?? "") + "</chat>").Replace("\n", "&#10;").Replace("\r", "&#13;"));
                                 }
                             }
@@ -1651,12 +1732,20 @@ namespace jkcnsl
                                     "\" server_time=\"" + (long)message.thread.server_time +
                                     "\" last_res=\"" + (long)message.thread.last_res + "\"" +
                                     (message.thread.ticket != null ? " ticket=\"" + HtmlEncodeAmpLtGt(message.thread.ticket, true) + "\"" : "") +
-                                    " x_refuge=\"1\"" +
+                                    (!suppressXRefuge ? " x_refuge=\"1\"" : "") +
                                     ">" + HtmlEncodeAmpLtGt(message.thread.content ?? "") + "</thread>").Replace("\n", "&#10;").Replace("\r", "&#13;"));
                                 serverUnixTime = TimeSpan.FromSeconds((long)message.thread.server_time);
                                 serverUnixTimeTick = Environment.TickCount & int.MaxValue;
-                                mixingInfo.refugeServerUnixTime = serverUnixTime;
-                                mixingInfo.refugeServerUnixTimeTick = serverUnixTimeTick;
+                                if (suppressXRefuge)
+                                {
+                                    mixingInfo.nicovideoServerUnixTime = serverUnixTime;
+                                    mixingInfo.nicovideoServerUnixTimeTick = serverUnixTimeTick;
+                                }
+                                else
+                                {
+                                    mixingInfo.refugeServerUnixTime = serverUnixTime;
+                                    mixingInfo.refugeServerUnixTimeTick = serverUnixTimeTick;
+                                }
                             }
                             commentCount = 0;
                         }
