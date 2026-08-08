@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.WebSockets;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -550,6 +551,15 @@ namespace jkcnsl
                 }
                 catch { }
             });
+
+            if (singleCommand)
+            {
+                // -c は標準入力を読まず、実行済みの単発コマンドが完了するまで待機する。
+                // ブラウザ認証のような対話的な処理でも、EOFによるキャンセルを防ぐ。
+                commands.CompleteAdding();
+                Task.WaitAll(new Task[] { processTask, writeTask });
+                return;
+            }
 
             if (pipeName != null)
             {
@@ -1879,6 +1889,158 @@ namespace jkcnsl
 
         /// <summary>ログインしていなければ.nicovideo.jpにログインしてセッションクッキーを取得する</summary>
         static async Task<string> GetNicovideoLoginCookieAsync(BlockingCollection<string> commandsForInteraction, CancellationToken ct)
+        {
+            if (_nicovideoLoginChecked)
+            {
+                return Settings.Instance.nicovideo_cookie ?? "";
+            }
+            _nicovideoLoginChecked = true;
+
+            if (await IsNicovideoLoginCookieAsync(Settings.Instance.nicovideo_cookie, ct))
+            {
+                return Settings.Instance.nicovideo_cookie;
+            }
+
+            // 非対話の接続時に認証ウィンドウを開かない。
+            if (commandsForInteraction == null)
+            {
+                return "";
+            }
+
+            string cookie = await GetNicovideoBrowserLoginCookieAsync(ct);
+            if (!await IsNicovideoLoginCookieAsync(cookie, ct))
+            {
+                return "";
+            }
+
+            Settings.Instance.nicovideo_cookie = cookie;
+            Settings.Instance.nicovideo_mfa_cookie = null;
+            Settings.Instance.last_login_attempt = Math.Floor((DateTime.UtcNow - new DateTime(1970, 1, 1)).TotalSeconds);
+            Settings.Instance.Save();
+            return cookie;
+        }
+
+        static async Task<bool> IsNicovideoLoginCookieAsync(string cookie, CancellationToken ct)
+        {
+            if (string.IsNullOrWhiteSpace(cookie) || cookie.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+            {
+                return false;
+            }
+
+            var clientHandler = new HttpClientHandler
+            {
+                AutomaticDecompression = DecompressionMethods.All,
+                UseCookies = false
+            };
+            using (var client = new HttpClient(clientHandler)
+            {
+                Timeout = TimeSpan.FromSeconds(Settings.Instance.http_get_timeout_sec == 0 ? HttpGetTimeoutSec :
+                    Math.Min(Math.Max(Settings.Instance.http_get_timeout_sec, HttpGetTimeoutSec * 0.1), HttpGetTimeoutSec * 10.0))
+            })
+            {
+                client.DefaultRequestHeaders.Add("User-Agent", Settings.Instance.useragent ?? UserAgent);
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+                client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Dest", "document");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Mode", "navigate");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-Site", "none");
+                client.DefaultRequestHeaders.Add("Sec-Fetch-User", "?1");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Cookie", cookie);
+                HttpResponseMessage response = await client.GetAsync("https://account.nicovideo.jp/my/account", ct);
+                return response.Headers.Contains("x-niconico-id");
+            }
+        }
+
+        static async Task<string> GetNicovideoBrowserLoginCookieAsync(CancellationToken ct)
+        {
+            string helperPath = Path.Join(AppContext.BaseDirectory, "jkcnsl-qt-login.exe");
+            if (!File.Exists(helperPath))
+            {
+                ResponseLines.Add("-Browser login helper jkcnsl-qt-login.exe was not found.");
+                return null;
+            }
+
+            string pipeName = "jkcnsl-login-" + Guid.NewGuid().ToString("N");
+            string nonce = Convert.ToHexString(RandomNumberGenerator.GetBytes(32));
+            using (var pipe = new NamedPipeServerStream(pipeName, PipeDirection.In, 1, PipeTransmissionMode.Byte, PipeOptions.Asynchronous))
+            using (var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            {
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(5));
+                var startInfo = new ProcessStartInfo(helperPath)
+                {
+                    UseShellExecute = false,
+                    // GUIヘルパー以外が起動された場合も、親アプリの画面上にコンソールを出さない。
+                    CreateNoWindow = true
+                };
+                startInfo.ArgumentList.Add("--pipe");
+                startInfo.ArgumentList.Add(pipeName);
+                startInfo.ArgumentList.Add("--nonce");
+                startInfo.ArgumentList.Add(nonce);
+
+                using (Process helper = Process.Start(startInfo))
+                {
+                    if (helper == null)
+                    {
+                        return null;
+                    }
+                    ResponseLines.Add("-Complete the Niconico login in the browser window.");
+
+                    Task connectTask = pipe.WaitForConnectionAsync(timeoutCts.Token);
+                    Task exitTask = helper.WaitForExitAsync(timeoutCts.Token);
+                    if (await Task.WhenAny(connectTask, exitTask) != connectTask)
+                    {
+                        return null;
+                    }
+                    await connectTask;
+
+                    using (var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, true))
+                    {
+                        string receivedNonce = await reader.ReadLineAsync(timeoutCts.Token);
+                        string encodedCookie = await reader.ReadLineAsync(timeoutCts.Token);
+                        if (receivedNonce != nonce || string.IsNullOrEmpty(encodedCookie) || encodedCookie.Length > 16384)
+                        {
+                            return null;
+                        }
+                        try
+                        {
+                            string cookie = Encoding.UTF8.GetString(Convert.FromBase64String(encodedCookie));
+                            return FilterNicovideoCookieHeader(cookie);
+                        }
+                        catch (FormatException)
+                        {
+                            return null;
+                        }
+                    }
+                }
+            }
+        }
+
+        static string FilterNicovideoCookieHeader(string header)
+        {
+            if (string.IsNullOrWhiteSpace(header) || header.IndexOfAny(new[] { '\r', '\n' }) >= 0)
+            {
+                return null;
+            }
+            var allowedNames = new HashSet<string>(StringComparer.Ordinal)
+            {
+                "nicosid", "user_session", "user_session_secure"
+            };
+            var cookies = new List<string>();
+            foreach (string item in header.Split(';'))
+            {
+                string trimmed = item.Trim();
+                int equals = trimmed.IndexOf('=');
+                if (equals <= 0 || equals == trimmed.Length - 1 || !allowedNames.Contains(trimmed.Substring(0, equals)))
+                {
+                    continue;
+                }
+                cookies.Add(trimmed);
+            }
+            return cookies.Any(item => item.StartsWith("user_session", StringComparison.Ordinal)) ? string.Join("; ", cookies) : null;
+        }
+
+        /// <summary>旧ログインフォームを使う互換実装。現行のAiコマンドからは呼び出さない。</summary>
+        static async Task<string> GetNicovideoLoginCookieLegacyAsync(BlockingCollection<string> commandsForInteraction, CancellationToken ct)
         {
             // メソッド実装にあたり nicologin (www.axfc.netの/u/4052467) および https://github.com/tsukumijima/NDGRClient を参考にした。
 

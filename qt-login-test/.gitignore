@@ -1,0 +1,4 @@
+/build/
+/build-release/
+/assets/*-source.png
+/assets/extracted-exe-icon.png
