@@ -1953,7 +1953,12 @@ namespace jkcnsl
 
         static async Task<string> GetNicovideoBrowserLoginCookieAsync(CancellationToken ct)
         {
-            string helperPath = Path.Join(AppContext.BaseDirectory, "jkcnsl-qt-login.exe");
+            string helperPath = Path.Join(AppContext.BaseDirectory, "jkcnsl_login", "jkcnsl-qt-login.exe");
+            // 旧配置からの更新時にも認証できるよう、同階層のヘルパーをフォールバックにする。
+            if (!File.Exists(helperPath))
+            {
+                helperPath = Path.Join(AppContext.BaseDirectory, "jkcnsl-qt-login.exe");
+            }
             if (!File.Exists(helperPath))
             {
                 ResponseLines.Add("-Browser login helper jkcnsl-qt-login.exe was not found.");
@@ -1970,12 +1975,15 @@ namespace jkcnsl
                 {
                     UseShellExecute = false,
                     // GUIヘルパー以外が起動された場合も、親アプリの画面上にコンソールを出さない。
-                    CreateNoWindow = true
+                    CreateNoWindow = true,
+                    WorkingDirectory = Path.GetDirectoryName(helperPath)
                 };
                 startInfo.ArgumentList.Add("--pipe");
                 startInfo.ArgumentList.Add(pipeName);
                 startInfo.ArgumentList.Add("--nonce");
                 startInfo.ArgumentList.Add(nonce);
+                startInfo.ArgumentList.Add("--settings");
+                startInfo.ArgumentList.Add(Path.GetFullPath(Path.Join(Settings.BaseDirectory ?? AppContext.BaseDirectory, "jkcnsl.json")));
 
                 using (Process helper = Process.Start(startInfo))
                 {

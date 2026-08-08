@@ -22,8 +22,11 @@ C:\Qt\6.11.1\msvc2022_64\bin\qt-cmake.bat -S . -B build -G Ninja
 cmake --build build
 ```
 
-Copy `build\jkcnsl-qt-login.exe` and its Qt deployment files beside
-`jkcnsl.exe`. Use `windeployqt` before distributing the helper.
+Deploy `jkcnsl-qt-login.exe` and all Qt deployment files under the
+`jkcnsl_login` subdirectory beside `jkcnsl.exe`. Use `windeployqt` before
+distributing the helper. When started manually, the helper first looks for
+`jkcnsl.json` in its own directory, then in its parent directory. `jkcnsl`
+passes an explicit settings-file path when it starts the helper.
 
 ## Test procedure
 

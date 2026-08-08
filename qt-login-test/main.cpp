@@ -1,7 +1,9 @@
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QHash>
 #include <QHBoxLayout>
 #include <QIcon>
@@ -62,8 +64,8 @@ QString ProtectForJkcnslSettings(const QString &value, QString *error)
 class LoginWindow final : public QMainWindow
 {
 public:
-    LoginWindow(QString pipeName, QByteArray nonce)
-        : pipeName_(std::move(pipeName)), nonce_(std::move(nonce)), profile_(this)
+    LoginWindow(QString pipeName, QByteArray nonce, QString settingsPath)
+        : pipeName_(std::move(pipeName)), nonce_(std::move(nonce)), settingsPath_(std::move(settingsPath)), profile_(this)
     {
         setWindowTitle(tr("jkcnsl - ニコニコログイン"));
         resize(1120, 820);
@@ -216,7 +218,7 @@ private:
             return;
         }
 
-        const QString settingsPath = QCoreApplication::applicationDirPath() + QStringLiteral("/jkcnsl.json");
+        const QString settingsPath = FindSettingsPath();
         QString saveError;
         for (int retry = 1; retry <= 3; ++retry)
         {
@@ -276,8 +278,27 @@ private:
         close();
     }
 
+    QString FindSettingsPath() const
+    {
+        if (!settingsPath_.isEmpty())
+            return settingsPath_;
+
+        const QDir applicationDir(QCoreApplication::applicationDirPath());
+        const QString localPath = applicationDir.filePath(QStringLiteral("jkcnsl.json"));
+        if (QFileInfo::exists(localPath))
+            return localPath;
+
+        const QString parentPath = QDir::cleanPath(applicationDir.filePath(QStringLiteral("../jkcnsl.json")));
+        if (QFileInfo::exists(parentPath))
+            return parentPath;
+
+        // jkcnsl_login 配置では親フォルダを標準の保存先にする。
+        return parentPath;
+    }
+
     QString pipeName_;
     QByteArray nonce_;
+    QString settingsPath_;
     QWebEngineProfile profile_;
     QWebEngineView view_;
     QPushButton *handoffButton_ = nullptr;
@@ -289,6 +310,7 @@ int main(int argc, char *argv[])
 {
     QString pipeName;
     QByteArray nonce;
+    QString settingsPath;
     for (int i = 1; i + 1 < argc; i++)
     {
         const QString argument = QString::fromLocal8Bit(argv[i]);
@@ -296,12 +318,14 @@ int main(int argc, char *argv[])
             pipeName = QString::fromLocal8Bit(argv[++i]);
         else if (argument == "--nonce")
             nonce = QByteArray(argv[++i]);
+        else if (argument == "--settings")
+            settingsPath = QString::fromLocal8Bit(argv[++i]);
     }
 
     QApplication app(argc, argv);
     const QIcon appIcon(QStringLiteral(":/jkcnsl-login-icon.png"));
     app.setWindowIcon(appIcon);
-    LoginWindow window(pipeName, nonce);
+    LoginWindow window(pipeName, nonce, settingsPath);
     // Qtの既定値に頼らず、認証ウィンドウ自身にも明示的に設定する。
     window.setWindowIcon(appIcon);
     window.show();
