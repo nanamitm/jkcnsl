@@ -27,6 +27,10 @@ namespace jkcnsl
         public bool distrust_device { get; set; }
         [DataMember]
         public double last_login_attempt { get; set; }
+        [DataMember]
+        public string cache_server_url { get; set; }
+        [DataMember]
+        public bool cache_commentable { get; set; }
 
         static Settings _instance;
         public static Settings Instance
@@ -82,6 +86,8 @@ namespace jkcnsl
             device_name = null;
             distrust_device = false;
             last_login_attempt = 0;
+            cache_server_url = null;
+            cache_commentable = false;
             if (settings != null)
             {
                 nicovideo_cookie = UnprotectString(settings.nicovideo_cookie);
@@ -92,6 +98,8 @@ namespace jkcnsl
                 device_name = settings.device_name;
                 distrust_device = settings.distrust_device;
                 last_login_attempt = settings.last_login_attempt;
+                cache_server_url = settings.cache_server_url;
+                cache_commentable = settings.cache_commentable;
             }
         }
 
@@ -106,7 +114,9 @@ namespace jkcnsl
                 useragent = useragent,
                 device_name = device_name,
                 distrust_device = distrust_device,
-                last_login_attempt = last_login_attempt
+                last_login_attempt = last_login_attempt,
+                cache_server_url = cache_server_url,
+                cache_commentable = cache_commentable
             };
 
             for (int retry = 1; retry < 20; retry++)
