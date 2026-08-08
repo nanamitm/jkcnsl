@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 6.11 REQUIRED COMPONENTS Network Widgets WebEngineWidgets)
+find_package(Qt6 6.8 REQUIRED COMPONENTS Network Widgets WebEngineWidgets)
 
 qt_add_executable(jkcnsl-qt-login
     main.cpp
