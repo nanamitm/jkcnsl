@@ -35,7 +35,8 @@ jobs:
       - name: Publish jkcnsl
         shell: pwsh
         run: >
-          dotnet publish jkcnsl.csproj -c Release -r win-x64 --self-contained false
+          dotnet publish jkcnsl.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -o dist/jkcnsl
 
       - name: Build and deploy browser login helper
