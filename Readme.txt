@@ -1,128 +1,130 @@
 jkcnsl
 
-■概要
-おもにニコニコ実況のコメントを取得する非公式のコマンドラインツールです。
+## Overview
 
-■注意
-これは非公式のツールです。
-ニコニコ実況(= https://live.nicovideo.jp/ の特定チャンネル)の仕様変更その他による不具合や不利益を被る可能性があります。
-ソースファイルのみ公開しますので、各自の責任で検査しビルドしてください。
+jkcnsl is an unofficial command-line tool mainly intended for retrieving comments from Niconico Jikkyo.
 
-■使い方など
-.NETアプリなのでビルドは各種のシェルでプロジェクトフォルダに移動し、
-> dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
-などとしてください。
-動作環境はWindowsではWindows10以降と思います。
-Linuxでは以下のようにビルドできます(Ubuntu 24.04の例)。設定ファイルなどの既定の保存先は"/var/local/jkcnsl"です。
-Windowsで"-r linux-x64"でビルドしたバイナリを持っていっても動くと思います。ARM向けは"-r linux-arm64"です。
+## Disclaimer
+
+This is an unofficial tool. Changes to Niconico Jikkyo (specific channels on https://live.nicovideo.jp/) or other factors may cause failures or other disadvantages.
+
+The source code is provided as-is. Please inspect and build it at your own responsibility.
+
+## Building and usage
+
+This is a .NET application. In a shell, change to the project directory and build it, for example:
+
+> dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
+
+Windows 10 or later is expected to be supported.
+
+On Linux, build it as follows (Ubuntu 24.04 example). The default location for the configuration file and related data is `/var/local/jkcnsl`.
+
 > sudo apt install dotnet-sdk-10.0
-> dotnet publish -c Release -r linux-x64 --self-contained true /p:PublishSingleFile=true /p:PublishTrimmed=true
+> dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
 > sudo install ./bin/Release/net10.0/linux-x64/publish/jkcnsl /usr/local/bin
 > sudo mkdir /var/local/jkcnsl
-> sudo chown $USER /var/local/jkcnsl  # パーミッション等は適宜調整
+> sudo chown $USER /var/local/jkcnsl  # Adjust permissions as appropriate.
 
-jkcnslを起動して、
-> Lch???<改行> (←???は実況の番号)
-などと打ち込めば、ニコニコ実況から取得したコメントが流れます。終了は c<改行> や
-q<改行> と打ち込んでください。
-> R1 wss://{有志の視聴セッションのアドレス}<改行>
-などと打ち込めば、有志の開設した避難所に接続できます。
+A Windows build targeting `linux-x64` should also run on Linux. Use `linux-arm64` for ARM systems.
 
-ニコニコ実況にログインする場合はまず
-> Smail {メールアドレス}<改行>
-> Spassword {パスワード}<改行>
-と打ち込んでログイン情報を設定ファイル"jkcnsl.json"に保存します。
-つづいて
-> Ai<改行>
-と打ち込んで"."が出力されればログイン成功です("!"は失敗)。
-2段階認証を設定している場合はワンタイムパスワードの入力を促されるので、ニコニコ
-から送られた確認コードを
-> +123456<改行>
-のように打ち込んでください。
+Start jkcnsl and enter a command such as:
 
-> Ao<改行>
-とすればログアウトできます。
+> Lch???<Enter> (replace `???` with the Jikkyo channel number)
 
-ログイン情報が設定されていれば次回のニコニコ実況への初回接続時に自動でログインが
-試みられるので、ログインが不要な場合はログアウト後に
-> Smail<改行>
-> Spassword<改行>
-と打ち込んで(mailかpasswordどちらか片方でもOK、"jkcnsl.json"の削除でもOK)ログイン
-情報を削除してください。
+Comments retrieved from Niconico Jikkyo will then be printed. Enter `c<Enter>` or `q<Enter>` to exit.
 
-2段階認証画面の「端末名」や「このデバイスを信頼する」はそれぞれ
-> Sdevice_name 端末名<改行>
-> Strust_device false<改行>
-のようにして設定できます。
+To connect to a volunteer-operated refuge server, use:
 
-> S<改行>
-と打ち込めば現在のすべての設定情報を出力できます。
+> R1 wss://{volunteer viewing-session address}<Enter>
 
-■起動オプション
-  -d {ディレクトリ}   設定ファイル(jkcnsl.json)の読み書き先を指定します。
-                      省略時は jkcnsl.exe と同じフォルダを使用します。
-                      複数ユーザーがそれぞれのアカウントで使う場合などに
-                      ユーザーごとのディレクトリを指定してください。
-  -c {コマンド}       単発コマンドモード。起動後すぐに指定コマンドを実行し終了します。
-  -n {パイプ名}       標準入力の代わりに名前付きパイプで入力を受け付けます。
-  -i                  実況ストリームを断続的に出力します。
-  -p {PID}            指定プロセスの終了を監視し、終了時に自動で落ちます(NicoJK用)。
-  --post-as-anon      コメントを匿名で投稿します。
-  --post-drop-dup     直前と同じ内容のコメント投稿を拒否します。
+### Signing in to Niconico Jikkyo
 
-■ライセンス
-MITとします。
+Run the following command:
 
-■ソース
+> Ai<Enter>
+
+On Windows, this launches the bundled `jkcnsl_login/jkcnsl-qt-login.exe` helper. Sign in normally in its browser window, then use the helper's button to return the login cookie to jkcnsl. A `.` indicates success and `!` indicates failure.
+
+When the helper is started by itself, it can also save the login cookie directly to `jkcnsl.json`. Keep the `jkcnsl_login` directory beside `jkcnsl.exe`; it contains the Qt WebEngine files required by the browser helper.
+
+To sign out, enter:
+
+> Ao<Enter>
+
+When login information is configured, jkcnsl attempts to sign in automatically on the first connection to Niconico Jikkyo. If you no longer need it, sign out and remove the login settings with:
+
+> Smail<Enter>
+> Spassword<Enter>
+
+Removing either setting is sufficient. Deleting `jkcnsl.json` also removes the saved login information.
+
+Enter `S<Enter>` to print all current settings.
+
+## Command-line options
+
+  -d {directory}     Specifies where `jkcnsl.json` is read and written.
+                     If omitted, the directory containing `jkcnsl.exe` is used.
+                     Specify a separate directory for each user when multiple
+                     users use their own accounts.
+  -c {command}       One-shot command mode. Runs the specified command and exits.
+  -n {pipe name}     Receives input through a named pipe instead of standard input.
+  -i                 Outputs the Jikkyo stream intermittently.
+  -p {PID}           Monitors the specified process and exits when it terminates
+                     (for NicoJK).
+  --post-as-anon     Posts comments anonymously.
+  --post-drop-dup    Rejects a comment identical to the immediately previous post.
+
+## License
+
+MIT.
+
+## Source
+
 https://github.com/xtne6f/jkcnsl
 
-Windows以外ではトレース出力を抑制していますが /p:AdditionalConstants=DO_NOT_SUPPRESS_TRACE をつけてビルドすると抑制解除します。
+Trace output is suppressed outside Windows. Build with `-p:AdditionalConstants=DO_NOT_SUPPRESS_TRACE` to disable that suppression.
 
-dwango,googleフォルダ以下のファイルは
+The files under the `dwango` and `google` directories were generated with protogen 3.2.52 from the `.proto` files in:
+
 https://github.com/n-air-app/nicolive-comment-protobuf/tree/871fe37c088af7e34fffd93aa7c2c309be5d90d2
 https://github.com/protocolbuffers/protobuf/tree/35cd01f9fe9afbeea38cc7b979a3b6bfcde82c03
-の.protoをもとにprotogen 3.2.52を使って以下のpowershellコマンドで作成しました。
-> ls dwango\nicolive\chat\data\*.proto, dwango\nicolive\chat\data\atoms\*.proto, dwango\nicolive\chat\service\edge\payload.proto | Resolve-Path -Relative | %{protogen --csharp_out=. +names=original "$_"}
-> ls google\protobuf\struct.proto | Resolve-Path -Relative | %{protogen --csharp_out=. +names=original "$_"}
 
-■謝辞
-実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および
-https://github.com/asannou/namami を参考にしました。とりわけ変数名など多くのアイ
-デアをTVRemotePlusから借用しています。
+using the following PowerShell commands:
 
-2024年以降の新方式のニコニコ実況への対応にあたり特に
-https://github.com/tsukumijima/NDGRClient および
-https://github.com/noriokun4649/TVTComment を参考にしました。
+> ls dwango\nicolive\chat\data\*.proto, dwango\nicolive\chat\data\atoms\*.proto, dwango\nicolive\chat\service\edge\payload.proto | Resolve-Path -Relative | %{ protogen --csharp_out=. +names=original "$_" }
+> ls google\protobuf\struct.proto | Resolve-Path -Relative | %{ protogen --csharp_out=. +names=original "$_" }
 
-ログイン機能の実装にあたりnicologin( www.axfc.netの/u/4052467 )を参考にしました。
+## Acknowledgements
 
-■キャッシュサーバー経由接続（改造版追加機能）
+The implementation was especially informed by https://github.com/tsukumijima/TVRemotePlus and https://github.com/asannou/namami. In particular, many variable names and implementation ideas were borrowed from TVRemotePlus.
 
-cache_server_url を設定すると、L コマンドによるニコニコ実況への接続を
-キャッシュサーバー経由に切り替えることができます。
-複数クライアントが同じチャンネルを視聴するとき、キャッシュサーバーが
-上流への接続を1本に集約してコメントを配信します。
+Support for the post-2024 Niconico Jikkyo system was especially informed by https://github.com/tsukumijima/NDGRClient and https://github.com/noriokun4649/TVTComment.
 
-キャッシュサーバーのURLを設定するには
-> Scache_server_url wss://{キャッシュサーバーのアドレス}<改行>
-設定を削除してニコニコ実況への直接接続に戻すには
-> Scache_server_url<改行>
-と打ち込んでください。
+The original login implementation was informed by nicologin (www.axfc.net/u/4052467).
 
-cache_server_url が設定された状態で Lch??? と打ち込むと
-キャッシュサーバーの /watch/ch??? に接続します。
-未設定の場合は従来通りニコニコ実況へ直接接続します。
+## Connecting through a cache server (custom addition)
 
-R コマンド（NX-Jikkyo などの避難所）をキャッシュサーバー経由にする場合は
-jkcnsl の改造は不要です。接続先を
-> R1 wss://{キャッシュサーバーのアドレス}/watch/{チャンネル名}<改行>
-のように指定してください。NicoJK から使う場合は NicoJK.ini の refugeUri を
-  refugeUri=wss://{キャッシュサーバーのアドレス}/watch/{jkID}
-に変更するだけで対応できます。
+When `cache_server_url` is configured, connections to Niconico Jikkyo made by the `L` command are routed through a cache server. When multiple clients watch the same channel, the cache server consolidates their upstream connections and distributes comments to them.
 
-NicoJK.ini で refugeMixing=1 を設定している場合、cache_server_url を設定すると
-避難所側・ニコニコ実況側の両方がキャッシュサーバー経由になります。
-このとき避難所から転送されるニコニコ実況コメントの重複は自動的に除去されます。
+To configure the cache server URL:
 
-設定ファイルの配置方法や jkcnsl.json の書き方については
-setting\readme.txt を参照してください。
+> Scache_server_url wss://{cache server address}<Enter>
+
+To clear the setting and return to direct Niconico Jikkyo connections:
+
+> Scache_server_url<Enter>
+
+When `cache_server_url` is set, `Lch???` connects to `/watch/ch???` on the cache server. When it is not set, jkcnsl connects directly to Niconico Jikkyo as before.
+
+The `R` command for refuge servers such as NX-Jikkyo does not require a jkcnsl modification to use the cache server. Specify the destination as follows:
+
+> R1 wss://{cache server address}/watch/{channel name}<Enter>
+
+For NicoJK, change `refugeUri` in `NicoJK.ini` to:
+
+> refugeUri=wss://{cache server address}/watch/{jkID}
+
+When `refugeMixing=1` is configured in `NicoJK.ini`, setting `cache_server_url` routes both the refuge server and Niconico Jikkyo through the cache server. Duplicate Niconico Jikkyo comments forwarded from the refuge server are removed automatically.
+
+For configuration-file placement and the `jkcnsl.json` format, see `setting/readme.txt`.
