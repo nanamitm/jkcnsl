@@ -1910,6 +1910,16 @@ namespace jkcnsl
             string cookie = await GetNicovideoBrowserLoginCookieAsync(ct);
             if (!await IsNicovideoLoginCookieAsync(cookie, ct))
             {
+                // 失効したクッキーを残したままにすると、NicovideoLoginAsyncが
+                // nicovideo_cookie != null を見てAiの結果を"."(成功)と報告し、
+                // 実際は未ログインなのに成功したように見えてしまう。
+                if (Settings.Instance.nicovideo_cookie != null)
+                {
+                    Settings.Instance.nicovideo_cookie = null;
+                    Settings.Instance.nicovideo_mfa_cookie = null;
+                    Settings.Instance.last_login_attempt = 0;
+                    Settings.Instance.Save();
+                }
                 return "";
             }
 
