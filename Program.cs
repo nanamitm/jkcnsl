@@ -2003,30 +2003,59 @@ namespace jkcnsl
                     }
                     ResponseLines.Add("-Complete the Niconico login in the browser window.");
 
-                    Task connectTask = pipe.WaitForConnectionAsync(timeoutCts.Token);
-                    Task exitTask = helper.WaitForExitAsync(timeoutCts.Token);
-                    if (await Task.WhenAny(connectTask, exitTask) != connectTask)
+                    try
                     {
-                        return null;
-                    }
-                    await connectTask;
-
-                    using (var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, true))
-                    {
-                        string receivedNonce = await reader.ReadLineAsync(timeoutCts.Token);
-                        string encodedCookie = await reader.ReadLineAsync(timeoutCts.Token);
-                        if (receivedNonce != nonce || string.IsNullOrEmpty(encodedCookie) || encodedCookie.Length > 16384)
+                        Task connectTask = pipe.WaitForConnectionAsync(timeoutCts.Token);
+                        Task exitTask = helper.WaitForExitAsync(timeoutCts.Token);
+                        if (await Task.WhenAny(connectTask, exitTask) != connectTask)
                         {
                             return null;
                         }
+                        await connectTask;
+
+                        using (var reader = new StreamReader(pipe, Encoding.UTF8, false, 4096, true))
+                        {
+                            string receivedNonce = await reader.ReadLineAsync(timeoutCts.Token);
+                            string encodedCookie = await reader.ReadLineAsync(timeoutCts.Token);
+                            if (receivedNonce != nonce || string.IsNullOrEmpty(encodedCookie) || encodedCookie.Length > 16384)
+                            {
+                                return null;
+                            }
+                            try
+                            {
+                                string cookie = Encoding.UTF8.GetString(Convert.FromBase64String(encodedCookie));
+                                return FilterNicovideoCookieHeader(cookie);
+                            }
+                            catch (FormatException)
+                            {
+                                return null;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        // Disposeではヘルパーは終了しない。キャンセルやタイムアウトで
+                        // 抜けるとログインウィンドウが残り続けるため、自力で終了する
+                        // 猶予を与えたうえで確実に終了させる。
                         try
                         {
-                            string cookie = Encoding.UTF8.GetString(Convert.FromBase64String(encodedCookie));
-                            return FilterNicovideoCookieHeader(cookie);
+                            using (var graceCts = new CancellationTokenSource(TimeSpan.FromSeconds(3)))
+                            {
+                                await helper.WaitForExitAsync(graceCts.Token);
+                            }
                         }
-                        catch (FormatException)
+                        catch (OperationCanceledException) { }
+                        try
                         {
-                            return null;
+                            if (!helper.HasExited)
+                            {
+                                // Qt WebEngineは子プロセスを持つのでツリーごと終了する
+                                helper.Kill(entireProcessTree: true);
+                            }
+                        }
+                        catch (Exception e)
+                        {
+                            Trace.WriteLine(e.ToString());
                         }
                     }
                 }
