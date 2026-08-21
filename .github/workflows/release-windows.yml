@@ -22,6 +22,11 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Set up MSVC
+        # このアクションはNode.js 20非推奨の警告が出るが、上流が2024年3月から
+        # 更新されておらず、最新リリース(v1.13.0)もデフォルトブランチも
+        # action.ymlは using: node20 のままなので、上げても消せない。
+        # ランナー側がNode.js 24で実行するため動作に支障はない。
+        # 消すにはvcvarsall.bat等への置き換えが必要。
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
 
       - name: Set up Qt
