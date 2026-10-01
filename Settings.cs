@@ -14,23 +14,11 @@ namespace jkcnsl
         [DataMember]
         public string nicovideo_cookie { get; set; }
         [DataMember]
-        public string nicovideo_mfa_cookie { get; set; }
-        [DataMember]
-        public string mail { get; set; }
-        [DataMember]
-        public string password { get; set; }
-        [DataMember]
         public string useragent { get; set; }
-        [DataMember]
-        public string device_name { get; set; }
-        [DataMember]
-        public bool distrust_device { get; set; }
         [DataMember]
         public double http_get_timeout_sec { get; set; }
         [DataMember]
         public double web_socket_timeout_sec { get; set; }
-        [DataMember]
-        public double last_login_attempt { get; set; }
         [DataMember]
         public string cache_server_url { get; set; }
         [DataMember]
@@ -83,29 +71,17 @@ namespace jkcnsl
             }
 
             nicovideo_cookie = null;
-            nicovideo_mfa_cookie = null;
-            mail = null;
-            password = null;
             useragent = null;
-            device_name = null;
-            distrust_device = false;
             http_get_timeout_sec = 0;
             web_socket_timeout_sec = 0;
-            last_login_attempt = 0;
             cache_server_url = null;
             cache_commentable = false;
             if (settings != null)
             {
                 nicovideo_cookie = UnprotectString(settings.nicovideo_cookie);
-                nicovideo_mfa_cookie = UnprotectString(settings.nicovideo_mfa_cookie);
-                mail = UnprotectString(settings.mail);
-                password = UnprotectString(settings.password);
                 useragent = settings.useragent;
-                device_name = settings.device_name;
-                distrust_device = settings.distrust_device;
                 http_get_timeout_sec = settings.http_get_timeout_sec;
                 web_socket_timeout_sec = settings.web_socket_timeout_sec;
-                last_login_attempt = settings.last_login_attempt;
                 cache_server_url = settings.cache_server_url;
                 cache_commentable = settings.cache_commentable;
             }
@@ -116,15 +92,9 @@ namespace jkcnsl
             var settings = new Settings
             {
                 nicovideo_cookie = ProtectString(nicovideo_cookie),
-                nicovideo_mfa_cookie = ProtectString(nicovideo_mfa_cookie),
-                mail = ProtectString(mail),
-                password = ProtectString(password),
                 useragent = useragent,
-                device_name = device_name,
-                distrust_device = distrust_device,
                 http_get_timeout_sec = http_get_timeout_sec,
                 web_socket_timeout_sec = web_socket_timeout_sec,
-                last_login_attempt = last_login_attempt,
                 cache_server_url = cache_server_url,
                 cache_commentable = cache_commentable
             };

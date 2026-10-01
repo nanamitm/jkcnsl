@@ -12,16 +12,14 @@ The source code is provided as-is. Please inspect and build it at your own respo
 
 ## Building and usage
 
-This is a .NET application. In a shell, change to the project directory and build it, for example:
+Build it on a machine with the .NET 10 SDK installed by running `x64build.bat`. `jkcnsl` and `JkcnslLoginWindow.exe` are produced in the `publish` folders under `bin`.
 
-> dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
-
-Windows 10 or later is expected to be supported.
+Windows 10 or later is expected to be supported. `JkcnslLoginWindow.exe` can be ignored if you do not need to sign in.
 
 On Linux, build it as follows (Ubuntu 24.04 example). The default location for the configuration file and related data is `/var/local/jkcnsl`.
 
 > sudo apt install dotnet-sdk-10.0
-> dotnet publish -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
+> dotnet publish jkcnsl.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true
 > sudo install ./bin/Release/net10.0/linux-x64/publish/jkcnsl /usr/local/bin
 > sudo mkdir /var/local/jkcnsl
 > sudo chown $USER /var/local/jkcnsl  # Adjust permissions as appropriate.
@@ -38,28 +36,25 @@ To connect to a volunteer-operated refuge server, use:
 
 > R1 wss://{volunteer viewing-session address}<Enter>
 
+### Settings
+
+jkcnsl saves a few settings, such as timeouts, to `jkcnsl.json`. Enter `S<Enter>` to print all current settings. Change a setting with, for example:
+
+> Shttp_get_timeout_sec 10<Enter>
+
+To reset a setting to its default, enter its name without a value:
+
+> Shttp_get_timeout_sec<Enter>
+
 ### Signing in to Niconico Jikkyo
 
-Run the following command:
+Use `JkcnslLoginWindow.exe` to sign in. It is a GUI application that opens a dedicated Edge (WebView2) browser and saves the `nicovideo_cookie` setting (and optionally `useragent`) of the jkcnsl located in the same folder. It can also copy the cookie when jkcnsl is not present.
 
-> Ai<Enter>
+The basic flow is to start `JkcnslLoginWindow.exe`, sign in or out in its browser, and press the "jkcnslに保存" (save to jkcnsl) button. Some startup options adjust its behavior; see the top of `JkcnslLoginWindow/App.xaml.cs` for details.
 
-On Windows, this launches the bundled `jkcnsl_login/jkcnsl-qt-login.exe` helper. Sign in normally in its browser window, then use the helper's button to return the login cookie to jkcnsl. A `.` indicates success and `!` indicates failure.
+To discard the saved login cookie from jkcnsl, enter:
 
-When the helper is started by itself, it can also save the login cookie directly to `jkcnsl.json`. Keep the `jkcnsl_login` directory beside `jkcnsl.exe`; it contains the Qt WebEngine files required by the browser helper.
-
-To sign out, enter:
-
-> Ao<Enter>
-
-When login information is configured, jkcnsl attempts to sign in automatically on the first connection to Niconico Jikkyo. If you no longer need it, sign out and remove the login settings with:
-
-> Smail<Enter>
-> Spassword<Enter>
-
-Removing either setting is sufficient. Deleting `jkcnsl.json` also removes the saved login information.
-
-Enter `S<Enter>` to print all current settings.
+> Snicovideo_cookie<Enter>
 
 ## Command-line options
 
@@ -100,8 +95,6 @@ using the following PowerShell commands:
 The implementation was especially informed by https://github.com/tsukumijima/TVRemotePlus and https://github.com/asannou/namami. In particular, many variable names and implementation ideas were borrowed from TVRemotePlus.
 
 Support for the post-2024 Niconico Jikkyo system was especially informed by https://github.com/tsukumijima/NDGRClient and https://github.com/noriokun4649/TVTComment.
-
-The original login implementation was informed by nicologin (www.axfc.net/u/4052467).
 
 ## Connecting through a cache server (custom addition)
 
