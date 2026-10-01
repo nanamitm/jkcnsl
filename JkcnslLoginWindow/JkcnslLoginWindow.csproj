@@ -5,6 +5,7 @@
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>JkcnslLoginWindow</RootNamespace>
     <UseWPF>true</UseWPF>
+    <ApplicationIcon>JkcnslLoginWindow.ico</ApplicationIcon>
     <Authors>xtne6f</Authors>
   </PropertyGroup>
 
@@ -12,6 +13,10 @@
     <DebugType>none</DebugType>
     <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="JkcnslLoginWindow.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" />

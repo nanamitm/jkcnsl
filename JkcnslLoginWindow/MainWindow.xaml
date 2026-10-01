@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:JkcnslLoginWindow"
         xmlns:Wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf" x:Class="JkcnslLoginWindow.MainWindow"
         mc:Ignorable="d"
-        Height="600" Title="JkcnslLoginWindow" Width="800" Closing="Window_Closing" Loaded="Window_Loaded">
+        Height="600" Icon="JkcnslLoginWindow.ico" Title="JkcnslLoginWindow" Width="800" Closing="Window_Closing" Loaded="Window_Loaded">
     <Grid>
         <Wpf:WebView2 Margin="10,39,10,39" Name="webView2" />
         <TextBox Height="24" Margin="10,10,85,0" Name="textBox_uri" TextWrapping="NoWrap" VerticalAlignment="Top" VerticalContentAlignment="Center" />
