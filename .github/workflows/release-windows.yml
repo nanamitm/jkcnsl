@@ -21,22 +21,6 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Set up MSVC
-        # このアクションはNode.js 20非推奨の警告が出るが、上流が2024年3月から
-        # 更新されておらず、最新リリース(v1.13.0)もデフォルトブランチも
-        # action.ymlは using: node20 のままなので、上げても消せない。
-        # ランナー側がNode.js 24で実行するため動作に支障はない。
-        # 消すにはvcvarsall.bat等への置き換えが必要。
-        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
-
-      - name: Set up Qt
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
-        with:
-          version: '6.8.3'
-          arch: win64_msvc2022_64
-          modules: qtwebengine qtwebchannel qtpositioning
-          cache: true
-
       - name: Publish jkcnsl
         shell: pwsh
         run: >
@@ -44,16 +28,14 @@ jobs:
           -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
           -o dist/jkcnsl
 
-      - name: Build and deploy browser login helper
+      - name: Publish JkcnslLoginWindow
+        # JkcnslLoginWindow.exeは同じフォルダのjkcnsl.exeの設定を読み書きするので、
+        # jkcnslと同じ出力先に置く。
         shell: pwsh
-        run: |
-          cmake -S qt-login-test -B build/qt-login -G Ninja -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/qt-login --config Release
-
-          $loginDir = 'dist/jkcnsl/jkcnsl_login'
-          New-Item -ItemType Directory -Force -Path $loginDir | Out-Null
-          Copy-Item 'build/qt-login/jkcnsl-qt-login.exe' "$loginDir/jkcnsl-qt-login.exe"
-          windeployqt --release --force "$loginDir/jkcnsl-qt-login.exe"
+        run: >
+          dotnet publish JkcnslLoginWindow/JkcnslLoginWindow.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishReferencesDocumentationFiles=false
+          -o dist/jkcnsl
 
       - name: Create ZIP
         shell: pwsh
