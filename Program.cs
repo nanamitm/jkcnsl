@@ -1391,11 +1391,12 @@ namespace jkcnsl
                                     bool isAnonymous_;
                                     if (comm.FirstOrDefault() == '+' &&
                                         ParsePostComment(comm.Substring(1), out dest_, out color_, out font_, out isAnonymous_, out position_, out size_, out text_) &&
-                                        (dest_ == "refuge" || !mixingInfo.ignoreUnspecifiedDestinationPost))
+                                        (dest_ == (suppressXRefuge ? "nico" : "refuge") || !mixingInfo.ignoreUnspecifiedDestinationPost))
                                     {
                                         // コメント投稿
-                                        // suppressXRefuge=true（Lコマンド経由）の場合はdest="nico"も許可する
-                                        bool destOk = dest_ == null || dest_ == "refuge" || (suppressXRefuge && dest_ == "nico");
+                                        // A cached official connection is still the nico
+                                        // destination, not a second refuge destination.
+                                        bool destOk = dest_ == null || dest_ == (suppressXRefuge ? "nico" : "refuge");
                                         if (!destOk || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
                                         {
                                             // 投稿拒否

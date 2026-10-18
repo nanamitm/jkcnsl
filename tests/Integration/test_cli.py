@@ -162,5 +162,42 @@ class CliTests(unittest.TestCase):
         self.assertEqual(starts['/watch/ch123']['cookie'], 'user_session=LOCAL_REVIEW_SENTINEL')
         self.assertNotIn('cookie', starts['/watch/jk1'])
 
+    def test_mixed_posts_only_reach_the_selected_destination(self):
+        server = self.mock()
+        client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}', 'cache_commentable': True})
+        self.start(client)
+        client.send(f'R2 ws://127.0.0.1:{server.port}/watch/jk1 ch123')
+        self.assertTrue(wait(lambda: sum(path.startswith('/comment/') for path, _ in server.messages) == 2))
+        # Wait for the thread responses to establish both server clocks.
+        self.assertTrue(wait(lambda: sum('<thread ' in line for line in client.out) == 2))
+        client.send('+[nico]LOCAL_ONLY_NICO_TEST')
+        client.send('+[refuge]LOCAL_ONLY_REFUGE_TEST')
+        client.send('+[]LOCAL_ONLY_UNSPECIFIED_TEST')
+        self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= 2))
+        # A second input round proves both command queues have also drained the
+        # unspecified post, rather than asserting before it could be delivered.
+        client.send('+[nico]LOCAL_ONLY_NICO_BARRIER')
+        client.send('+[refuge]LOCAL_ONLY_REFUGE_BARRIER')
+        self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= 4))
+        posts = [(path, msg['data']['text']) for path, msg in server.messages
+            if isinstance(msg, dict) and msg.get('type') == 'postComment']
+        self.assertCountEqual(posts, [('/watch/ch123', 'LOCAL_ONLY_NICO_TEST'),
+            ('/watch/jk1', 'LOCAL_ONLY_REFUGE_TEST'), ('/watch/ch123', 'LOCAL_ONLY_NICO_BARRIER'),
+            ('/watch/jk1', 'LOCAL_ONLY_REFUGE_BARRIER')])
+
+    def test_single_cache_rejects_refuge_destination(self):
+        server = self.mock()
+        client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}', 'cache_commentable': True})
+        self.start(client)
+        client.send('Lch123')
+        self.assertTrue(wait(lambda: any('<thread ' in line for line in client.out)))
+        client.send('+[refuge]LOCAL_ONLY_WRONG_TARGET')
+        self.assertTrue(wait(lambda: any('chat_result status="1"' in line for line in client.out)))
+        client.send('+[]LOCAL_ONLY_DEFAULT_TARGET')
+        self.assertTrue(wait(lambda: any('chat_result status="0"' in line for line in client.out)))
+        posts = [(path, msg['data']['text']) for path, msg in server.messages
+            if isinstance(msg, dict) and msg.get('type') == 'postComment']
+        self.assertEqual(posts, [('/watch/ch123', 'LOCAL_ONLY_DEFAULT_TARGET')])
+
 if __name__ == '__main__':
     unittest.main()
