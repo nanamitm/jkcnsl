@@ -376,8 +376,19 @@ namespace jkcnsl
                                             break;
                                         }
                                     }
-                                    Settings.Instance.Save();
-                                    ResponseLines.Add(".");
+                                    try
+                                    {
+                                        Settings.Instance.Save();
+                                        ResponseLines.Add(".");
+                                    }
+                                    catch (Exception e)
+                                    {
+                                        Trace.WriteLine(e.ToString());
+                                        // Keep the in-memory state consistent with the
+                                        // file and let callers (including the GUI) retry.
+                                        Settings.Instance.Load();
+                                        ResponseLines.Add("!");
+                                    }
                                 }
                                 break;
                             case '+':

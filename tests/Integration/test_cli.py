@@ -162,5 +162,45 @@ class CliTests(unittest.TestCase):
         self.assertEqual(starts['/watch/ch123']['cookie'], 'user_session=LOCAL_REVIEW_SENTINEL')
         self.assertNotIn('cookie', starts['/watch/jk1'])
 
+    @unittest.skipUnless(os.name == 'nt', 'Windows read-only file semantics')
+    def test_failed_save_reports_failure_and_can_be_retried(self):
+        client = self.client({'useragent': 'OriginalAgent'})
+        config = client.folder / 'jkcnsl.json'
+        original = config.read_bytes()
+        os.chmod(config, stat.S_IREAD)
+        try:
+            result = subprocess.run(EXE + ['-d', str(client.folder), '-c', 'Suseragent ChangedAgent'],
+                capture_output=True, timeout=8)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(config.read_bytes(), original)
+            self.start(client)
+            client.send('Suseragent ChangedAgent')
+            self.assertTrue(wait(lambda: '!\n' in client.out))
+            client.send('S')
+            self.assertTrue(wait(lambda: '.\n' in client.out))
+            self.assertIn('-useragent OriginalAgent\n', client.out)
+            self.assertEqual(config.read_bytes(), original)
+        finally:
+            os.chmod(config, stat.S_IREAD | stat.S_IWRITE)
+        client.send('Suseragent ChangedAgent')
+        self.assertTrue(wait(lambda: client.out.count('.\n') == 2))
+        self.assertEqual(json.loads(config.read_text())['useragent'], 'ChangedAgent')
+
+    def test_successful_save_preserves_other_settings(self):
+        client = self.client({'cache_server_url': 'ws://127.0.0.1:12345',
+            'cache_commentable': True, 'web_socket_timeout_sec': 12})
+        self.set_fake_cookie(client)
+        result = subprocess.run(EXE + ['-d', str(client.folder), '-c', 'Suseragent ChangedAgent'],
+            capture_output=True, timeout=8)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        saved = json.loads((client.folder / 'jkcnsl.json').read_text())
+        self.assertEqual(saved['useragent'], 'ChangedAgent')
+        self.assertEqual(saved['cache_server_url'], 'ws://127.0.0.1:12345')
+        self.assertTrue(saved['cache_commentable'])
+        self.assertEqual(saved['web_socket_timeout_sec'], 12)
+        result = subprocess.run(EXE + ['-d', str(client.folder), '-c', 'S'], capture_output=True, timeout=8)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn(b'nicovideo_cookie user_session=LOCAL_REVIEW_SENTINEL', result.stdout)
+
 if __name__ == '__main__':
     unittest.main()

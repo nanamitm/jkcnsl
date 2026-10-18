@@ -99,6 +99,7 @@ namespace jkcnsl
                 cache_commentable = cache_commentable
             };
 
+            Exception lastError = null;
             for (int retry = 1; retry < 20; retry++)
             {
                 try
@@ -107,14 +108,16 @@ namespace jkcnsl
                     {
                         new DataContractJsonSerializerWrapper<Settings>().WriteValue(fs, settings);
                     }
-                    break;
+                    return;
                 }
                 catch (Exception e)
                 {
+                    lastError = e;
                     Trace.WriteLine(e.ToString());
                 }
                 Thread.Sleep(10 * retry);
             }
+            throw new IOException("Could not save jkcnsl.json after retrying.", lastError);
         }
 
         static string ProtectString(string s)
