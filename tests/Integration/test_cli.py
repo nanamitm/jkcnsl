@@ -14,6 +14,18 @@ def wait(predicate, seconds=4):
         time.sleep(.03)
     return bool(predicate())
 
+def write_pipe(name, data):
+    deadline = time.monotonic() + 4
+    while True:
+        try:
+            with open('\\\\.\\pipe\\' + name, 'wb', buffering=0) as pipe:
+                pipe.write(data)
+            return
+        except OSError:
+            if time.monotonic() >= deadline:
+                raise
+            time.sleep(.03)
+
 class Mock:
     def __init__(self):
         self.sock=socket.socket(); self.sock.bind(('127.0.0.1',0)); self.sock.listen()
@@ -89,11 +101,14 @@ class Client:
         (self.folder/'jkcnsl.json').write_text(json.dumps(settings))
         self.out=[]; self.err=[]
     def start(self,*args):
+        self.pipe_name = args[args.index('-n') + 1] if '-n' in args else None
         self.p=subprocess.Popen(EXE+['-d',str(self.folder)]+list(args),stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,text=True,encoding='utf-8',errors='replace')
         self.t1=threading.Thread(target=lambda:self.out.extend(self.p.stdout)); self.t2=threading.Thread(target=lambda:self.err.extend(self.p.stderr)); self.t1.start(); self.t2.start()
     def send(self,line): self.p.stdin.write(line+'\n'); self.p.stdin.flush()
     def close(self):
-        if self.p.poll() is None: self.send('q')
+        if self.p.poll() is None:
+            if self.pipe_name: write_pipe(self.pipe_name, b'q\n')
+            else: self.send('q')
         self.p.wait(timeout=12); self.t1.join(); self.t2.join()
         self.p.stdin.close(); self.p.stdout.close(); self.p.stderr.close()
 
@@ -161,6 +176,32 @@ class CliTests(unittest.TestCase):
         starts = {path: msg['data'] for path, msg in server.messages if path.startswith('/watch/')}
         self.assertEqual(starts['/watch/ch123']['cookie'], 'user_session=LOCAL_REVIEW_SENTINEL')
         self.assertNotIn('cookie', starts['/watch/jk1'])
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows named pipes')
+    def test_blank_pipe_lines_do_not_stop_command_processing(self):
+        client = self.client({})
+        name = 'jkcnsl-test-' + client.folder.name
+        self.start(client, '-n', name)
+        for count, newline in enumerate((b'\n', b'\r\n', b'\n', b'\r\n'), 1):
+            write_pipe(name, newline)
+            write_pipe(name, b'S\n')
+            self.assertTrue(wait(lambda: client.out.count('.\n') == count))
+            self.assertIsNone(client.p.poll())
+        self.assertNotIn('!\n', client.out)
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows named pipes')
+    def test_blank_pipe_lines_preserve_an_active_stream(self):
+        server = self.mock()
+        client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}', 'cache_commentable': True})
+        name = 'jkcnsl-test-' + client.folder.name
+        self.start(client, '-n', name)
+        write_pipe(name, b'Lch123\n')
+        self.assertTrue(wait(lambda: any('<thread ' in line for line in client.out)))
+        write_pipe(name, b'\n')
+        write_pipe(name, b'\r\n')
+        write_pipe(name, b'+[nico]LOCAL_ONLY_PIPE_TEST\n')
+        self.assertTrue(wait(lambda: any('chat_result status="0"' in line for line in client.out)))
+        self.assertIsNone(client.p.poll())
 
 if __name__ == '__main__':
     unittest.main()
