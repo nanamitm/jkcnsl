@@ -80,6 +80,10 @@ https://github.com/xtne6f/jkcnsl
 
 Trace output is suppressed outside Windows. Build with `-p:AdditionalConstants=DO_NOT_SUPPRESS_TRACE` to disable that suppression.
 
+Run local CLI integration tests (Python 3, no third-party packages or real credentials):
+
+> python tests/Integration/test_cli.py
+
 The files under the `dwango` and `google` directories were generated with protogen 3.2.52 from the `.proto` files in:
 
 https://github.com/n-air-app/nicolive-comment-protobuf/tree/871fe37c088af7e34fffd93aa7c2c309be5d90d2

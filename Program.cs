@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -246,7 +247,7 @@ namespace jkcnsl
                                         {
                                             // キャッシュサーバー経由: 避難所プロトコルで接続
                                             string refugeUrl = cacheUrl.TrimEnd('/') + "/watch/" + arg[0];
-                                            ResponseLines.Add(await GetRefugeStreamAsync(refugeUrl, commands, new StreamMixingInfo(), quitCts.Token, suppressXRefuge: true));
+                                            ResponseLines.Add(await GetRefugeStreamAsync(refugeUrl, commands, new StreamMixingInfo(), quitCts.Token, suppressXRefuge: true, useCacheAuthentication: true));
                                         }
                                         else
                                         {
@@ -645,7 +646,7 @@ namespace jkcnsl
                     if (!string.IsNullOrEmpty(cacheUrl))
                     {
                         string cacheRefugeUrl = cacheUrl.TrimEnd('/') + "/watch/" + lvId;
-                        failed = await GetRefugeStreamAsync(cacheRefugeUrl, nicovideoCommands, mixingInfo, ct, suppressXRefuge: true) != ".";
+                        failed = await GetRefugeStreamAsync(cacheRefugeUrl, nicovideoCommands, mixingInfo, ct, suppressXRefuge: true, useCacheAuthentication: true) != ".";
                     }
                     else
                     {
@@ -1264,7 +1265,7 @@ namespace jkcnsl
         }
 
         /// <summary>実況ストリーム(避難所)</summary>
-        static async Task<string> GetRefugeStreamAsync(string webSocketUrl, BlockingCollection<string> commands, StreamMixingInfo mixingInfo, CancellationToken ct, bool suppressXRefuge = false)
+        static async Task<string> GetRefugeStreamAsync(string webSocketUrl, BlockingCollection<string> commands, StreamMixingInfo mixingInfo, CancellationToken ct, bool suppressXRefuge = false, bool useCacheAuthentication = false)
         {
             // メソッド実装にあたり特に https://github.com/tsukumijima/TVRemotePlus および https://github.com/asannou/namami を参考にした。
 
@@ -1296,13 +1297,13 @@ namespace jkcnsl
                     await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
                     {
                         string commentable = Settings.Instance.cache_commentable ? "true" : "false";
-                        // cache_commentable=true のとき、投稿用にニコニコのログイン状態を確認する
-                        // cookie を含めて送信（per-client 投稿認証のため）
-                        string cookieVal = Settings.Instance.nicovideo_cookie ?? "";
-                        // JSON エスケープ（" と \ を置換）
-                        string cookieJson = "\"" + cookieVal.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+                        // Only explicitly routed cache connections may receive login
+                        // credentials, and only when posting is enabled. Ordinary
+                        // R1/R2 refuge connections never receive the Niconico cookie.
+                        string cookieProperty = useCacheAuthentication && Settings.Instance.cache_commentable ?
+                            ",\"cookie\":\"" + JsonEncodedText.Encode(Settings.Instance.nicovideo_cookie ?? "").ToString() + "\"" : "";
                         await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
-                            $"{{\"type\":\"startWatching\",\"data\":{{\"room\":{{\"protocol\":\"webSocket\",\"commentable\":{commentable}}},\"reconnect\":false,\"cookie\":{cookieJson}}}}}")),
+                            $"{{\"type\":\"startWatching\",\"data\":{{\"room\":{{\"protocol\":\"webSocket\",\"commentable\":{commentable}}},\"reconnect\":false{cookieProperty}}}}}")),
                             WebSocketMessageType.Text, true, ct), ct);
                     }
 
