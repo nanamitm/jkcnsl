@@ -579,6 +579,11 @@ namespace jkcnsl
                         // 終了
                         break;
                     }
+                    if (comm.Length == 0)
+                    {
+                        // Ignore blank lines just as the named-pipe input does.
+                        continue;
+                    }
                     commands.Add(comm);
                 }
             }

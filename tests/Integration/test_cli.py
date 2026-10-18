@@ -177,6 +177,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(starts['/watch/ch123']['cookie'], 'user_session=LOCAL_REVIEW_SENTINEL')
         self.assertNotIn('cookie', starts['/watch/jk1'])
 
+    def test_blank_stdin_lines_are_ignored(self):
+        client = self.client({})
+        self.start(client)
+        client.send('')
+        client.send('S')
+        self.assertTrue(wait(lambda: '.\n' in client.out))
+        self.assertNotIn('?\n', client.out)
+
     @unittest.skipUnless(os.name == 'nt', 'Windows named pipes')
     def test_blank_pipe_lines_do_not_stop_command_processing(self):
         client = self.client({})
