@@ -40,3 +40,17 @@ jobs:
         # ランナーに入っているPython 3を使う(サードパーティのパッケージは不要)
         shell: pwsh
         run: python tests/Integration/test_cli.py -v
+
+      - name: Publish trimmed jkcnsl
+        # リリースと同じ設定でトリムしたexeでも動くことを確認する
+        shell: pwsh
+        run: >
+          dotnet publish jkcnsl.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=true
+          -o dist/trimmed
+
+      - name: CLI integration tests (trimmed release build)
+        shell: pwsh
+        env:
+          JKCNSL_TEST_EXE: ${{ github.workspace }}/dist/trimmed/jkcnsl.exe
+        run: python tests/Integration/test_cli.py -v

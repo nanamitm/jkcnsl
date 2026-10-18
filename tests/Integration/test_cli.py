@@ -5,7 +5,10 @@ from datetime import datetime, timezone, timedelta
 
 REPO = Path(__file__).resolve().parents[2]
 ROOT = Path(tempfile.mkdtemp(prefix='jkcnsl-integration-'))
-EXE = ['dotnet', str(REPO / 'bin/Release/net10.0/jkcnsl.dll')]
+# Set JKCNSL_TEST_EXE to test a published executable (e.g. a trimmed release build)
+# instead of building and running bin/Release/net10.0/jkcnsl.dll.
+TEST_EXE = os.environ.get('JKCNSL_TEST_EXE')
+EXE = [TEST_EXE] if TEST_EXE else ['dotnet', str(REPO / 'bin/Release/net10.0/jkcnsl.dll')]
 
 def wait(predicate, seconds=4):
     deadline=time.monotonic()+seconds
@@ -117,7 +120,8 @@ class Client:
 class CliTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        subprocess.run(['dotnet', 'build', str(REPO / 'jkcnsl.csproj'), '-c', 'Release', '--nologo'], check=True)
+        if not TEST_EXE:
+            subprocess.run(['dotnet', 'build', str(REPO / 'jkcnsl.csproj'), '-c', 'Release', '--nologo'], check=True)
 
     @classmethod
     def tearDownClass(cls):
