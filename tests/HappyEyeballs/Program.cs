@@ -120,6 +120,35 @@ await Run("A concurrent losing success is disposed and the winner stays open", a
     Check(ReferenceEquals(winner, stream1) ? stream2.Disposed : stream1.Disposed);
 });
 
+await Run("A fast failure starts the next address without waiting for the delay", async () =>
+{
+    var elapsed = Stopwatch.StartNew();
+    long secondStart = -1;
+    using var stream = await HappyEyeballsConnector.ConnectAsync(new[] { v6, v4 }, 443, (ep, ct) =>
+    {
+        if (ep.Address.Equals(v6)) return Task.FromException<Stream>(new SocketException((int)SocketError.NetworkUnreachable));
+        secondStart = elapsed.ElapsedMilliseconds;
+        return Task.FromResult<Stream>(new MemoryStream());
+    }, CancellationToken.None);
+    Check(secondStart >= 0 && secondStart < 150, "Next attempt waited after a failure: " + secondStart + " ms");
+});
+
+await Run("An unexpected loser error neither hides the winner nor leaks it", async () =>
+{
+    var loser = new TaskCompletionSource<Stream>(TaskCreationOptions.RunContinuationsAsynchronously);
+    var winnerStream = new TrackingStream();
+    using var winner = await HappyEyeballsConnector.ConnectAsync(new[] { v6, v4 }, 443, (ep, ct) =>
+    {
+        if (ep.Address.Equals(v6))
+        {
+            ct.Register(() => loser.TrySetException(new InvalidOperationException("unexpected")));
+            return loser.Task;
+        }
+        return Task.FromResult<Stream>(winnerStream);
+    }, CancellationToken.None);
+    Check(ReferenceEquals(winner, winnerStream) && !winnerStream.Disposed);
+});
+
 await Run("Empty DNS result fails and pre-canceled calls do not start connections", async () =>
 {
     try
@@ -217,7 +246,7 @@ await Run("TLS still rejects an untrusted server certificate", async () =>
     await server;
 });
 
-Console.WriteLine("All 11 tests passed.");
+Console.WriteLine("All 13 tests passed.");
 
 static void Check(bool value, string message = "Assertion failed")
 {

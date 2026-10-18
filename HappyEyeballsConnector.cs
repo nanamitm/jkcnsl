@@ -59,16 +59,38 @@ namespace jkcnsl
             Stream winner = null;
             try
             {
-                for (int i = 0; i < addresses.Count; i++) attempts.Add(AttemptAsync(addresses[i], i));
-                var pending = new List<Task<Stream>>(attempts);
+                var pending = new List<Task<Stream>>();
+                Task nextAttemptDelay = null;
+                int next = 0;
                 Exception lastError = null;
-                while (pending.Count > 0)
+                for (;;)
                 {
-                    Task<Stream> completed = await Task.WhenAny(pending);
-                    pending.Remove(completed);
+                    ct.ThrowIfCancellationRequested();
+                    if (nextAttemptDelay == null && next < addresses.Count)
+                    {
+                        Task<Stream> attempt = AttemptAsync(addresses[next++]);
+                        attempts.Add(attempt);
+                        pending.Add(attempt);
+                        if (next < addresses.Count)
+                        {
+                            nextAttemptDelay = Task.Delay(ConnectionAttemptDelayMilliseconds, attemptsCts.Token);
+                        }
+                    }
+                    if (pending.Count == 0) break;
+
+                    var waiting = new List<Task>(pending);
+                    if (nextAttemptDelay != null) waiting.Add(nextAttemptDelay);
+                    Task completed = await Task.WhenAny(waiting);
+                    if (completed == nextAttemptDelay)
+                    {
+                        nextAttemptDelay = null;
+                        continue;
+                    }
+                    var completedAttempt = (Task<Stream>)completed;
+                    pending.Remove(completedAttempt);
                     try
                     {
-                        Stream stream = await completed;
+                        Stream stream = await completedAttempt;
                         if (ct.IsCancellationRequested)
                         {
                             stream.Dispose();
@@ -80,6 +102,8 @@ namespace jkcnsl
                     catch (Exception e) when (e is SocketException || e is IOException)
                     {
                         lastError = e;
+                        // Do not wait out the delay after a failure; start the next address now.
+                        nextAttemptDelay = null;
                     }
                 }
                 throw new HttpRequestException("Could not connect to any resolved address.", lastError);
@@ -96,18 +120,15 @@ namespace jkcnsl
                         Stream stream = await attempt;
                         if (!ReferenceEquals(stream, winner)) stream.Dispose();
                     }
-                    catch (Exception e) when (e is OperationCanceledException || e is SocketException || e is IOException)
+                    catch
                     {
+                        // A losing attempt's error must not hide the result or leak the winner.
                     }
                 }
             }
 
-            async Task<Stream> AttemptAsync(IPAddress address, int index)
+            async Task<Stream> AttemptAsync(IPAddress address)
             {
-                if (index > 0)
-                {
-                    await Task.Delay(TimeSpan.FromMilliseconds((long)index * ConnectionAttemptDelayMilliseconds), attemptsCts.Token);
-                }
                 return await connectAddressAsync(new IPEndPoint(address, port), attemptsCts.Token);
             }
         }

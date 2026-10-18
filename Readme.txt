@@ -38,7 +38,7 @@ To connect to a volunteer-operated refuge server, use:
 
 ### Settings
 
-WebSocket connections try resolved addresses at 250 ms intervals, alternating IPv6 and IPv4 while preserving the first address family's DNS preference. The first successful TCP connection is used and the remaining attempts are canceled. This avoids waiting for an unreachable IPv6 address before trying IPv4. The existing `web_socket_timeout_sec` still limits the entire connection operation, including DNS, TLS and the WebSocket handshake. Proxy selection and TLS certificate validation remain handled by .NET.
+WebSocket connections try resolved addresses at 250 ms intervals (or immediately after the previous attempt fails), alternating IPv6 and IPv4 while preserving the first address family's DNS preference. The first successful TCP connection is used and the remaining attempts are canceled. This avoids waiting for an unreachable IPv6 address before trying IPv4. The existing `web_socket_timeout_sec` still limits the entire connection operation, including DNS, TLS and the WebSocket handshake. Proxy selection and TLS certificate validation remain handled by .NET.
 
 jkcnsl saves a few settings, such as timeouts, to `jkcnsl.json`. Enter `S<Enter>` to print all current settings. Change a setting with, for example:
 
