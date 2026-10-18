@@ -38,6 +38,8 @@ To connect to a volunteer-operated refuge server, use:
 
 ### Settings
 
+WebSocket connections try resolved addresses at 250 ms intervals, alternating IPv6 and IPv4 while preserving the first address family's DNS preference. The first successful TCP connection is used and the remaining attempts are canceled. This avoids waiting for an unreachable IPv6 address before trying IPv4. The existing `web_socket_timeout_sec` still limits the entire connection operation, including DNS, TLS and the WebSocket handshake. Proxy selection and TLS certificate validation remain handled by .NET.
+
 jkcnsl saves a few settings, such as timeouts, to `jkcnsl.json`. Enter `S<Enter>` to print all current settings. Change a setting with, for example:
 
 > Shttp_get_timeout_sec 10<Enter>
@@ -79,6 +81,10 @@ MIT.
 https://github.com/xtne6f/jkcnsl
 
 Trace output is suppressed outside Windows. Build with `-p:AdditionalConstants=DO_NOT_SUPPRESS_TRACE` to disable that suppression.
+
+Run the WebSocket connection regression tests with:
+
+> dotnet run --project tests/HappyEyeballs/HappyEyeballs.Tests.csproj -c Release
 
 The files under the `dwango` and `google` directories were generated with protogen 3.2.52 from the `.proto` files in:
 

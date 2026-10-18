@@ -29,6 +29,8 @@ namespace jkcnsl
         const int WebSocketTimeoutSec = 15;
         const int MixedStreamReconnectionSec = 20;
 
+        static readonly HttpMessageInvoker WebSocketInvoker = HappyEyeballsConnector.CreateInvoker();
+
         // HttpClientは使いまわす。クッキーは共有しない
         static HttpClient _httpClientInstance;
         static HttpClient HttpClientInstance
@@ -769,7 +771,7 @@ namespace jkcnsl
                         watchSession.Options.SetRequestHeader("Cookie", cookie);
                     }
                     // 視聴セッションに接続
-                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
+                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), WebSocketInvoker, ct), ct);
                     await DoWebSocketAction(async ct => await watchSession.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes(
                                             "{\"type\":\"startWatching\",\"data\":{\"reconnect\":false}}")),
                                             WebSocketMessageType.Text, true, ct), ct);
@@ -1293,7 +1295,7 @@ namespace jkcnsl
                     commentSession.Options.SetRequestHeader("User-Agent", Settings.Instance.useragent ?? UserAgent);
                     commentSession.Options.AddSubProtocol("msg.nicovideo.jp#json");
                     // 視聴セッションに接続
-                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), ct), ct);
+                    await DoWebSocketAction(async ct => await watchSession.ConnectAsync(new Uri(webSocketUrl), WebSocketInvoker, ct), ct);
                     {
                         string commentable = Settings.Instance.cache_commentable ? "true" : "false";
                         // cache_commentable=true のとき、投稿用にニコニコのログイン状態を確認する
@@ -1559,7 +1561,7 @@ namespace jkcnsl
                                                     new CommentSessionOpen() { ping = new ContentContainer() { content = "rf: 0" } }
                                                 });
                                                 // コメントセッションに接続
-                                                await DoWebSocketAction(async ct => await commentSession.ConnectAsync(new Uri(room.messageServer.uri), ct), ct);
+                                                await DoWebSocketAction(async ct => await commentSession.ConnectAsync(new Uri(room.messageServer.uri), WebSocketInvoker, ct), ct);
                                                 await DoWebSocketAction(async ct => await commentSession.SendAsync(new ArraySegment<byte>(ms.ToArray()), WebSocketMessageType.Text, true, ct), ct);
                                                 commentConnected = true;
                                                 commentKeepTick = Environment.TickCount & int.MaxValue;
