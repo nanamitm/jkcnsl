@@ -17,7 +17,7 @@ def wait(predicate, seconds=4):
 class Mock:
     def __init__(self):
         self.sock=socket.socket(); self.sock.bind(('127.0.0.1',0)); self.sock.listen()
-        self.port=self.sock.getsockname()[1]; self.messages=[]; self.errors=[]; self.connections=[]
+        self.port=self.sock.getsockname()[1]; self.messages=[]; self.errors=[]; self.connections=[]; self.post_errors=[]
         threading.Thread(target=self.accept,daemon=True).start()
     def accept(self):
         while True:
@@ -79,7 +79,9 @@ class Mock:
                     if op!=1 or not data: continue
                     value=json.loads(data); self.messages.append((path,value))
                     if isinstance(value,dict) and value.get('type')=='postComment':
-                        self.frame(c,{'type':'postCommentResult','data':{}})
+                        error = self.post_errors.pop(0) if self.post_errors else None
+                        self.frame(c, {'type':'error','data':{'code':error}} if error else
+                            {'type':'postCommentResult','data':{}})
             except (EOFError,ConnectionError,OSError): pass
             except Exception as e: self.errors.append(str(e))
 
@@ -198,6 +200,26 @@ class CliTests(unittest.TestCase):
         posts = [(path, msg['data']['text']) for path, msg in server.messages
             if isinstance(msg, dict) and msg.get('type') == 'postComment']
         self.assertEqual(posts, [('/watch/ch123', 'LOCAL_ONLY_DEFAULT_TARGET')])
+
+    def test_post_result_tags_match_the_connection_role(self):
+        for cached in (False, True):
+            with self.subTest(cached=cached):
+                server = self.mock()
+                server.post_errors = ['INVALID_MESSAGE', 'COMMENT_POST_NOT_ALLOWED', None]
+                client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}' if cached else None,
+                    'cache_commentable': True})
+                self.start(client, '--post-drop-dup', '--post-maxlen', '8')
+                client.send('Lch123' if cached else f'R1 ws://127.0.0.1:{server.port}/watch/jk1')
+                self.assertTrue(wait(lambda: any('<thread ' in line for line in client.out)))
+                wrong_target = 'refuge' if cached else 'nico'
+                commands = [f'+[{wrong_target}]BAD', '+[]INVALID', '+[]DENIED', '+[]OK', '+[]OK', '+[]TOO_LONG_MESSAGE']
+                statuses = [1, 1, 4, 0, 5, 8]
+                for count, command in enumerate(commands, 1):
+                    client.send(command)
+                    self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= count))
+                attribute = '' if cached else ' x_refuge="1"'
+                self.assertEqual([line.strip() for line in client.out if 'chat_result' in line],
+                    [f'-<chat_result status="{status}"{attribute} />' for status in statuses])
 
 if __name__ == '__main__':
     unittest.main()
