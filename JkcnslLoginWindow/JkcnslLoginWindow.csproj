@@ -7,6 +7,8 @@
     <UseWPF>true</UseWPF>
     <ApplicationIcon>JkcnslLoginWindow.ico</ApplicationIcon>
     <Authors>xtne6f</Authors>
+    <!-- ThemeMode (Windowsのライト/ダーク設定への追従) は試験的APIとして警告されるため抑制する -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
