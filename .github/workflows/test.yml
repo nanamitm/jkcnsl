@@ -40,3 +40,41 @@ jobs:
         # ランナーに入っているPython 3を使う(サードパーティのパッケージは不要)
         shell: pwsh
         run: python tests/Integration/test_cli.py -v
+
+      - name: Publish trimmed jkcnsl
+        # リリースと同じ設定でトリムしたexeでも動くことを確認する
+        shell: pwsh
+        run: >
+          dotnet publish jkcnsl.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=true
+          -o dist/trimmed
+
+      - name: CLI integration tests (trimmed release build)
+        shell: pwsh
+        env:
+          JKCNSL_TEST_EXE: ${{ github.workspace }}/dist/trimmed/jkcnsl.exe
+        run: python tests/Integration/test_cli.py -v
+
+  build-linux:
+    # Readmeの手順どおりLinux向けにビルドし、起動できることを確かめる
+    # (Linuxはファイル名の大文字小文字を区別するので、csprojのパス指定の誤りもここで分かる)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish jkcnsl for linux-x64
+        run: >
+          dotnet publish jkcnsl.csproj -c Release -r linux-x64 --self-contained true
+          -p:PublishSingleFile=true -p:PublishTrimmed=true
+
+      - name: Smoke test
+        run: |
+          settings_dir="$(mktemp -d)"
+          ./bin/Release/net10.0/linux-x64/publish/jkcnsl -d "$settings_dir" -c S

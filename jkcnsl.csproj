@@ -18,7 +18,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="jkcnslLoginWindow\**" />
+    <Compile Remove="JkcnslLoginWindow\**" />
     <Compile Remove="tests\**" />
     <EmbeddedResource Remove="JkcnslLoginWindow\**" />
     <None Remove="JkcnslLoginWindow\**" />
