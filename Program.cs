@@ -505,6 +505,12 @@ namespace jkcnsl
                                 comm = Encoding.UTF8.GetString(buf, 0, bufCount - (bufCount > 0 && buf[bufCount - 1] == 0x0D ? 1 : 0));
                             }
                             catch { }
+                            if (comm.Length == 0)
+                            {
+                                // Ignore blank LF/CRLF input just as a separator;
+                                // there is no command character to inspect.
+                                return true;
+                            }
                             if (comm[0] == 'q')
                             {
                                 quit = true;
@@ -583,6 +589,11 @@ namespace jkcnsl
                         Trace.WriteLine("Quit");
                         // 終了
                         break;
+                    }
+                    if (comm.Length == 0)
+                    {
+                        // Ignore blank lines just as the named-pipe input does.
+                        continue;
                     }
                     commands.Add(comm);
                 }
