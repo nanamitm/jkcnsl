@@ -17,7 +17,7 @@ def wait(predicate, seconds=4):
 class Mock:
     def __init__(self):
         self.sock=socket.socket(); self.sock.bind(('127.0.0.1',0)); self.sock.listen()
-        self.port=self.sock.getsockname()[1]; self.messages=[]; self.errors=[]; self.connections=[]
+        self.port=self.sock.getsockname()[1]; self.messages=[]; self.errors=[]; self.connections=[]; self.post_errors=[]
         threading.Thread(target=self.accept,daemon=True).start()
     def accept(self):
         while True:
@@ -79,7 +79,9 @@ class Mock:
                     if op!=1 or not data: continue
                     value=json.loads(data); self.messages.append((path,value))
                     if isinstance(value,dict) and value.get('type')=='postComment':
-                        self.frame(c,{'type':'postCommentResult','data':{}})
+                        error = self.post_errors.pop(0) if self.post_errors else None
+                        self.frame(c, {'type':'error','data':{'code':error}} if error else
+                            {'type':'postCommentResult','data':{}})
             except (EOFError,ConnectionError,OSError): pass
             except Exception as e: self.errors.append(str(e))
 
@@ -161,6 +163,63 @@ class CliTests(unittest.TestCase):
         starts = {path: msg['data'] for path, msg in server.messages if path.startswith('/watch/')}
         self.assertEqual(starts['/watch/ch123']['cookie'], 'user_session=LOCAL_REVIEW_SENTINEL')
         self.assertNotIn('cookie', starts['/watch/jk1'])
+
+    def test_mixed_posts_only_reach_the_selected_destination(self):
+        server = self.mock()
+        client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}', 'cache_commentable': True})
+        self.start(client)
+        client.send(f'R2 ws://127.0.0.1:{server.port}/watch/jk1 ch123')
+        self.assertTrue(wait(lambda: sum(path.startswith('/comment/') for path, _ in server.messages) == 2))
+        # Wait for the thread responses to establish both server clocks.
+        self.assertTrue(wait(lambda: sum('<thread ' in line for line in client.out) == 2))
+        client.send('+[nico]LOCAL_ONLY_NICO_TEST')
+        client.send('+[refuge]LOCAL_ONLY_REFUGE_TEST')
+        client.send('+[]LOCAL_ONLY_UNSPECIFIED_TEST')
+        self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= 2))
+        # A second input round proves both command queues have also drained the
+        # unspecified post, rather than asserting before it could be delivered.
+        client.send('+[nico]LOCAL_ONLY_NICO_BARRIER')
+        client.send('+[refuge]LOCAL_ONLY_REFUGE_BARRIER')
+        self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= 4))
+        posts = [(path, msg['data']['text']) for path, msg in server.messages
+            if isinstance(msg, dict) and msg.get('type') == 'postComment']
+        self.assertCountEqual(posts, [('/watch/ch123', 'LOCAL_ONLY_NICO_TEST'),
+            ('/watch/jk1', 'LOCAL_ONLY_REFUGE_TEST'), ('/watch/ch123', 'LOCAL_ONLY_NICO_BARRIER'),
+            ('/watch/jk1', 'LOCAL_ONLY_REFUGE_BARRIER')])
+
+    def test_single_cache_rejects_refuge_destination(self):
+        server = self.mock()
+        client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}', 'cache_commentable': True})
+        self.start(client)
+        client.send('Lch123')
+        self.assertTrue(wait(lambda: any('<thread ' in line for line in client.out)))
+        client.send('+[refuge]LOCAL_ONLY_WRONG_TARGET')
+        self.assertTrue(wait(lambda: any('chat_result status="1"' in line for line in client.out)))
+        client.send('+[]LOCAL_ONLY_DEFAULT_TARGET')
+        self.assertTrue(wait(lambda: any('chat_result status="0"' in line for line in client.out)))
+        posts = [(path, msg['data']['text']) for path, msg in server.messages
+            if isinstance(msg, dict) and msg.get('type') == 'postComment']
+        self.assertEqual(posts, [('/watch/ch123', 'LOCAL_ONLY_DEFAULT_TARGET')])
+
+    def test_post_result_tags_match_the_connection_role(self):
+        for cached in (False, True):
+            with self.subTest(cached=cached):
+                server = self.mock()
+                server.post_errors = ['INVALID_MESSAGE', 'COMMENT_POST_NOT_ALLOWED', None]
+                client = self.client({'cache_server_url': f'ws://127.0.0.1:{server.port}' if cached else None,
+                    'cache_commentable': True})
+                self.start(client, '--post-drop-dup', '--post-maxlen', '8')
+                client.send('Lch123' if cached else f'R1 ws://127.0.0.1:{server.port}/watch/jk1')
+                self.assertTrue(wait(lambda: any('<thread ' in line for line in client.out)))
+                wrong_target = 'refuge' if cached else 'nico'
+                commands = [f'+[{wrong_target}]BAD', '+[]INVALID', '+[]DENIED', '+[]OK', '+[]OK', '+[]TOO_LONG_MESSAGE']
+                statuses = [1, 1, 4, 0, 5, 8]
+                for count, command in enumerate(commands, 1):
+                    client.send(command)
+                    self.assertTrue(wait(lambda: sum('chat_result' in line for line in client.out) >= count))
+                attribute = '' if cached else ' x_refuge="1"'
+                self.assertEqual([line.strip() for line in client.out if 'chat_result' in line],
+                    [f'-<chat_result status="{status}"{attribute} />' for status in statuses])
 
 if __name__ == '__main__':
     unittest.main()

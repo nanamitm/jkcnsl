@@ -1274,6 +1274,9 @@ namespace jkcnsl
                 return "!";
             }
 
+            void AddPostResult(int status) => ResponseLines.Add("-<chat_result status=\"" + status + "\"" +
+                (suppressXRefuge ? "" : " x_refuge=\"1\"") + " />");
+
             // NX-Jikkyoかどうか。chatタグの形式を微妙に変えるだけなので判定はラフ
             bool isNxJikkyo = webSocketUrl.IndexOf("nx-jikkyo", StringComparison.Ordinal) >= 0;
             // 転送コメント除去のためx_roomで通知されたthread_idを保存する
@@ -1391,30 +1394,31 @@ namespace jkcnsl
                                     bool isAnonymous_;
                                     if (comm.FirstOrDefault() == '+' &&
                                         ParsePostComment(comm.Substring(1), out dest_, out color_, out font_, out isAnonymous_, out position_, out size_, out text_) &&
-                                        (dest_ == "refuge" || !mixingInfo.ignoreUnspecifiedDestinationPost))
+                                        (dest_ == (suppressXRefuge ? "nico" : "refuge") || !mixingInfo.ignoreUnspecifiedDestinationPost))
                                     {
                                         // コメント投稿
-                                        // suppressXRefuge=true（Lコマンド経由）の場合はdest="nico"も許可する
-                                        bool destOk = dest_ == null || dest_ == "refuge" || (suppressXRefuge && dest_ == "nico");
+                                        // A cached official connection is still the nico
+                                        // destination, not a second refuge destination.
+                                        bool destOk = dest_ == null || dest_ == (suppressXRefuge ? "nico" : "refuge");
                                         if (!destOk || vposBaseUnixTime <= TimeSpan.Zero || serverUnixTime < vposBaseUnixTime)
                                         {
                                             // 投稿拒否
-                                            ResponseLines.Add("-<chat_result status=\"1\" x_refuge=\"1\" />");
+                                            AddPostResult(1);
                                         }
                                         else if ((((Environment.TickCount & int.MaxValue) - _lastPostTick) & int.MaxValue) < _postIntervalMsec)
                                         {
                                             // コメントはブロックされている(投稿間隔が短すぎる)
-                                            ResponseLines.Add("-<chat_result status=\"5\" x_refuge=\"1\" />");
+                                            AddPostResult(5);
                                         }
                                         else if (_postMaxlen > 0 && text_.Length > _postMaxlen)
                                         {
                                             // コメント内容が長すぎる
-                                            ResponseLines.Add("-<chat_result status=\"8\" x_refuge=\"1\" />");
+                                            AddPostResult(8);
                                         }
                                         else if (_postDropDuplicate && text_ == _lastPostComment)
                                         {
                                             // コメントはブロックされている(投稿コメントが前回と同じ)
-                                            ResponseLines.Add("-<chat_result status=\"5\" x_refuge=\"1\" />");
+                                            AddPostResult(5);
                                         }
                                         else
                                         {
@@ -1496,11 +1500,11 @@ namespace jkcnsl
                                             Trace.WriteLine(Encoding.UTF8.GetString(watchBuf, 0, watchCount));
                                             if (error.code == "INVALID_MESSAGE")
                                             {
-                                                ResponseLines.Add("-<chat_result status=\"1\" x_refuge=\"1\" />");
+                                                AddPostResult(1);
                                             }
                                             else if (error.code == "COMMENT_POST_NOT_ALLOWED")
                                             {
-                                                ResponseLines.Add("-<chat_result status=\"4\" x_refuge=\"1\" />");
+                                                AddPostResult(4);
                                             }
                                         }
                                     }
@@ -1513,7 +1517,7 @@ namespace jkcnsl
                                 case "postCommentResult":
                                     Trace.WriteLine("postCommentResult");
                                     // コメント投稿に成功
-                                    ResponseLines.Add("-<chat_result status=\"0\" x_refuge=\"1\" />");
+                                    AddPostResult(0);
                                     break;
                                 case "room":
                                     Trace.WriteLine("room");
