@@ -1,0 +1,42 @@
+name: Test
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # 結合テストは名前付きパイプや読み取り専用ファイルなどWindowsの挙動を使うのでWindowsで実行する
+    runs-on: windows-2022
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build JkcnslLoginWindow
+        shell: pwsh
+        run: dotnet build JkcnslLoginWindow/JkcnslLoginWindow.csproj -c Release
+
+      - name: WebSocket connection tests
+        shell: pwsh
+        run: dotnet run --project tests/HappyEyeballs/HappyEyeballs.Tests.csproj -c Release
+
+      - name: CLI integration tests
+        # ランナーに入っているPython 3を使う(サードパーティのパッケージは不要)
+        shell: pwsh
+        run: python tests/Integration/test_cli.py -v
