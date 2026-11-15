@@ -148,5 +148,24 @@ For NicoJK, to show Niconico Jikkyo and 5ch comments together, add `n` after `{j
 Notes:
 
 - 5ch comments are read-only. Posts sent to a 5ch source are rejected by the cache server.
-- NicoJK mixes only one refuge source, so 5ch replaces any other refuge server (such as NX-Jikkyo) in this setup.
+- NicoJK mixes only one refuge source, so 5ch replaces any other refuge server (such as NX-Jikkyo) in this setup. To keep both, use the merged source below.
 - The cache server adds extra fields for its web client, such as a 5ch thread identifier on each comment and a separate thread-list message. jkcnsl ignores them.
+
+### Refuge and 5ch together from the cache server
+
+The cache server also offers a merged source, `jk{ID}m` (for example `jk1m`), that delivers the refuge server's comments (`jk{ID}r`, such as NX-Jikkyo) and the 5ch comments (`jk{ID}n`) as one stream. It is delivered like a refuge server, so no jkcnsl modification is required. It is available for a channel when both its refuge source and its 5ch source are configured on the cache server.
+
+To view the refuge and 5ch comments together:
+
+> R1 wss://{cache server address}/watch/jk1m<Enter>
+
+For NicoJK, to show Niconico Jikkyo, the refuge server and 5ch together, add `m` after `{jkID}` in `refugeUri` and enable mixing in `NicoJK.ini`:
+
+> refugeUri=wss://{cache server address}/watch/{jkID}m
+> refugeMixing=1
+
+Notes:
+
+- Niconico Jikkyo itself is not included in `jk{ID}m`, because NicoJK already receives it directly. Comments the refuge server forwards from Niconico Jikkyo are still recognised as forwarded, so duplicates are removed as usual.
+- Posts go to the refuge server. 5ch remains read-only.
+- Comment numbers (`no`) are renumbered by the cache server so the two sources do not collide.
