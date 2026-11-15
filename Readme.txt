@@ -131,3 +131,22 @@ For NicoJK, change `refugeUri` in `NicoJK.ini` to:
 When `refugeMixing=1` is configured in `NicoJK.ini`, setting `cache_server_url` routes both the refuge server and Niconico Jikkyo through the cache server. Duplicate Niconico Jikkyo comments forwarded from the refuge server are removed automatically.
 
 For configuration-file placement and the `jkcnsl.json` format, see `setting/readme.txt`.
+
+### 5ch comments from the cache server
+
+The cache server can also deliver comments from 5ch live-commentary threads for a channel, using the source name `jk{ID}n` (for example `jk1n` for NHK General). It is delivered like a refuge server, so no jkcnsl modification is required. 5ch must be enabled on the cache server for that channel.
+
+To view only the 5ch comments:
+
+> R1 wss://{cache server address}/watch/jk1n<Enter>
+
+For NicoJK, to show Niconico Jikkyo and 5ch comments together, add `n` after `{jkID}` in `refugeUri` and enable mixing in `NicoJK.ini`:
+
+> refugeUri=wss://{cache server address}/watch/{jkID}n
+> refugeMixing=1
+
+Notes:
+
+- 5ch comments are read-only. Posts sent to a 5ch source are rejected by the cache server.
+- NicoJK mixes only one refuge source, so 5ch replaces any other refuge server (such as NX-Jikkyo) in this setup.
+- The cache server adds extra fields for its web client, such as a 5ch thread identifier on each comment and a separate thread-list message. jkcnsl ignores them.
