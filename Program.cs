@@ -1672,12 +1672,15 @@ namespace jkcnsl
                                 }
                                 // インポートされたコメントを区別する
                                 // 旧形式: user_idが"nicolive:"で始まる、新形式(NX-Jikkyo): threadがrefuge自身のthread_idで始まらない
+                                // キャッシュサーバー経由の公式ストリーム(suppressXRefuge)は転送元そのものなので判定しない。
+                                // room.threadIdはchatStreamID(ch…)だがchatのthreadは実況側のID(jk9_…)で一致しないため、
+                                // 判定すると混合時(dropForwardedChat)に公式コメントがすべて捨てられてしまう
                                 int userIdPos = message.chat.user_id == null ? -1 :
                                                 message.chat.user_id.StartsWith("nicolive:", StringComparison.Ordinal) ? 9 : 0;
-                                bool isForwarded = (userIdPos == 9) ||
+                                bool isForwarded = !suppressXRefuge && (userIdPos == 9 ||
                                     (refugeThreadId != null && message.chat.thread != null &&
                                      message.chat.thread != refugeThreadId &&
-                                     !message.chat.thread.StartsWith(refugeThreadId + "_", StringComparison.Ordinal));
+                                     !message.chat.thread.StartsWith(refugeThreadId + "_", StringComparison.Ordinal)));
                                 if (!isForwarded || !mixingInfo.dropForwardedChat)
                                 {
                                     ResponseLines.Add(("-<chat" +
